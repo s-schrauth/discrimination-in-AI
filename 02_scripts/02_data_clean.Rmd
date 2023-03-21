@@ -1,0 +1,407 @@
+---
+title: "Data Cleaning"
+author: "Simon Schrauth"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Clean Compas Dataset
+
+## Goal
+
+After executing this script, the compas dataset should be cleaned and ready for modelling. Additionally, one should have an overview over the variables and their missingness pattern.
+
+## Install packages
+
+```{r}
+pacman::p_load(tidyverse, 
+               here,
+               naniar,
+               reticulate,
+               lubridate,
+               wesanderson,
+               ggdist)
+```
+
+## Load data
+
+```{r}
+data_raw = readRDS(here("01_data", "02_data_processed",
+                        "01_data_recid_load.rds"))
+```
+
+## Glimpse on the data
+
+### Overview over data
+
+```{r}
+data_raw
+```
+
+```{r}
+str(data_raw)
+```
+
+### Check for Missing Values
+
+Table of absolute missing values per variable as well as percentage of missing values per variable
+
+```{r}
+miss_var_summary(data_raw)
+```
+
+Plot with most frequent missingness patterns with according absolute frequencies
+
+```{r}
+gg_miss_upset(data_raw) 
+```
+
+## Cleaning
+
+INSERT TEXT HERE
+
+```{r}
+data_clean = data_raw %>% 
+  arrange(id) %>% 
+  column_to_rownames(var = "id") %>% 
+  select(sex, 
+         race,
+         age, 
+         juv_fel_count,
+         juv_misd_count,
+         juv_other_count,
+         priors_count = priors_count...15, 
+         charge_degree = c_charge_degree, 
+         days_b_screening_arrest, 
+         is_recid, 
+         c_jail_in, 
+         c_jail_out,
+         two_year_recid) %>% 
+  filter(days_b_screening_arrest <= 30,
+         days_b_screening_arrest >= -30,
+         is_recid != -1,
+         charge_degree != "O") %>% 
+  mutate(c_jail_in = floor_date(c_jail_in, unit = "day"),
+         c_jail_out = floor_date(c_jail_out, unit = "day")) %>% 
+  mutate(days_in_jail = as.numeric(round(difftime(c_jail_out, 
+                                                  c_jail_in, 
+                                                  unit = "days")
+                                         )
+                                   )
+         ) %>% 
+  mutate(across(.cols = c(sex,
+                          race,
+                          charge_degree),
+                .fns = ~ factor(.))) %>% 
+  select(!c(days_b_screening_arrest,
+            c_jail_in,
+            c_jail_out,
+            is_recid)) %>%
+  select(sex,
+         race,
+         age,
+         days_in_jail,
+         juv_fel_count,
+         juv_misd_count,
+         juv_other_count,
+         priors_count,
+         charge_degree,
+         two_year_recid)
+```
+
+
+## Exploratory Data Analysis
+### Dataset overview
+```{r}
+data_clean
+```
+
+```{r}
+str(data_clean)
+```
+
+### Visualization of the class variable (readmitted) & the protected variables (race, age & gender)
+
+#### Definition of colors
+```{r}
+colors_discrete = rep(wes_palette("Darjeeling1"), 3)
+```
+
+#### Class variable: Recidivism
+```{r}
+eda_class = data_clean %>% 
+  select(two_year_recid) %>% 
+  mutate(two_year_recid = ifelse(two_year_recid == 1, "yes", "no")) %>% 
+  ggplot(aes(x = fct_rev(fct_infreq(two_year_recid)), fill = fct_rev(fct_infreq(two_year_recid)))) +
+  geom_bar() +
+  labs(title = "Class Frequencies in the Compas Dataset",
+       subtitle = "With Class Variable 'Recidivism after two years'",
+       x = "Recidivism", 
+       y = "Count") +
+  scale_fill_manual(values = colors_discrete) +
+  guides(fill = "none")
+
+eda_class
+```
+
+```{r}
+ggsave("01_eda_class.png",
+       plot = eda_class,
+       device = "png",
+       path = here("03_outputs", "03_outputs_graphs"),
+       dpi = 300,
+       width = 25,
+       height = 15,
+       units = c("cm")
+       )
+```
+
+#### Protected variable: Race
+```{r}
+eda_race = data_clean %>% 
+  select(race) %>% 
+  ggplot(aes(x = fct_infreq(race), fill = fct_infreq(race))) +
+  geom_bar() +
+  labs(title = "Race Frequencies in the Compas Dataset",
+       x = "Race", 
+       y = "Count") +
+  scale_fill_manual(values = colors_discrete) +
+  guides(fill = "none")
+
+eda_race
+```
+
+```{r}
+ggsave("02_eda_race.png",
+       plot = eda_race,
+       device = "png",
+       path = here("03_outputs", "03_outputs_graphs"),
+       dpi = 300,
+       width = 25,
+       height = 15,
+       units = c("cm")
+       )
+```
+
+#### Protected variable: Age
+```{r}
+eda_age_raincloud = data_clean %>% 
+  select(age) %>% 
+  ggplot(aes(x = age, fill = factor(1))) +
+  ggdist::stat_halfeye(
+    adjust = 0.75,
+    justification = -.2,
+    .width = 0,
+    point_colour = NA
+  ) +
+  geom_boxplot(
+    width = .12,
+    outlier.colour = NA,
+    alpha = 0.5
+  ) +
+  labs(title = "Age Distribution in the Compas Dataset",
+       subtitle = "Probability Density Function & Boxplot",
+       x = "Age", 
+       y = "") +
+  scale_fill_manual(values = colors_discrete[3]) +
+  guides(fill = "none") +
+  theme(axis.ticks.y = element_blank(),
+        axis.text.y = element_blank())
+
+eda_age_raincloud
+```
+
+```{r}
+eda_age_hist = data_clean %>% 
+  select(age) %>% 
+  ggplot(aes(x = age, fill = factor(1))) +
+  geom_histogram(binwidth = 2) +
+  labs(title = "Age Distribution in the Compas Dataset",
+       subtitle = "Histogram with Binwidth 2",
+       x = "Age", 
+       y = "Density") +
+  scale_fill_manual(values = colors_discrete[3]) +
+  guides(fill = "none") 
+
+eda_age_hist
+```
+
+```{r}
+ggsave("03_eda_age_raincloud.png",
+       plot = eda_age_raincloud,
+       device = "png",
+       path = here("03_outputs", "03_outputs_graphs"),
+       dpi = 300,
+       width = 25,
+       height = 15,
+       units = c("cm")
+       )
+
+ggsave("04_eda_age_hist.png",
+       plot = eda_age_hist,
+       device = "png",
+       path = here("03_outputs", "03_outputs_graphs"),
+       dpi = 300,
+       width = 25,
+       height = 15,
+       units = c("cm")
+       )
+```
+
+#### Protected variable: Gender
+```{r}
+eda_sex = data_clean %>% 
+  select(sex) %>% 
+  ggplot(aes(x = fct_infreq(sex), fill = fct_infreq(sex))) +
+  geom_bar() +
+  labs(title = "Sex Frequencies in the Compas Dataset",
+       x = "Sex", 
+       y = "Count") +
+  scale_fill_manual(values = colors_discrete) +
+  guides(fill = "none")
+
+eda_sex
+```
+
+```{r}
+ggsave("05_eda_sex.png",
+       plot = eda_sex,
+       device = "png",
+       path = here("03_outputs", "03_outputs_graphs"),
+       dpi = 300,
+       width = 15,
+       height = 15,
+       units = c("cm")
+       )
+```
+
+
+#### Protected variables: Race & Gender
+```{r}
+eda_race_sex = data_clean %>% 
+  count(race, sex) %>% 
+  group_by(race) %>% 
+  mutate(n_cum = sum(n)) %>% 
+  ungroup() %>% 
+  mutate(n_rel = n/n_cum) %>% 
+  
+  ggplot(aes(x = sex, y  = n_rel, fill = sex)) +
+  geom_col() +
+  facet_wrap(~race) +
+  labs(title = "Sex Frequencies in the Compas Dataset",
+       subtitle = "Grouped by Race",
+       x = "Sex", 
+       y = "Count") +
+  scale_fill_manual(values = colors_discrete) +
+  guides(fill = "none") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  scale_y_continuous(labels = scales::percent)
+
+eda_race_sex
+```
+
+```{r}
+ggsave("06_eda_race_sex.png",
+       plot = eda_race_sex,
+       device = "png",
+       path = here("03_outputs", "03_outputs_graphs"),
+       dpi = 300,
+       width = 25,
+       height = 15,
+       units = c("cm")
+       )
+```
+
+
+
+#### Protected variables: Race & Age
+```{r}
+eda_race_age = data_clean %>% 
+  select(age, race) %>% 
+  ggplot(aes(x = race, y = age, fill = race)) +
+  ggdist::stat_halfeye(
+    adjust = 0.75,
+    justification = -.05,
+    .width = 0,
+    point_colour = NA
+  ) +
+  geom_boxplot(
+    width = .12,
+    outlier.colour = NA,
+    alpha = 0.5
+  ) +
+  labs(title = "Age Distribution in the Compas Dataset",
+       subtitle = "Grouped by Race",
+       x = "Race", 
+       y = "Age") +
+  scale_fill_manual(values = colors_discrete) +
+  guides(fill = "none") +
+  coord_flip()
+
+eda_race_age
+```
+
+```{r}
+ggsave("07_eda_race_age.png",
+       plot = eda_race_age,
+       device = "png",
+       path = here("03_outputs", "03_outputs_graphs"),
+       dpi = 300,
+       width = 25,
+       height = 15,
+       units = c("cm")
+       )
+```
+
+
+#### Protected variables: Age & Gender
+```{r}
+eda_sex_age = data_clean %>% 
+  select(age, sex) %>% 
+  ggplot(aes(x = sex, y = age, fill = sex)) +
+  ggdist::stat_halfeye(
+    adjust = 0.75,
+    justification = -.09,
+    .width = 0,
+    point_colour = NA
+  ) +
+  geom_boxplot(
+    width = .12,
+    outlier.colour = NA,
+    alpha = 0.5
+  ) +
+  labs(title = "Age Distribution in the Compas Dataset",
+       subtitle = "Grouped by Sex",
+       x = "Sex", 
+       y = "Age") +
+  scale_fill_manual(values = colors_discrete) +
+  guides(fill = "none") +
+  coord_flip()
+
+eda_sex_age
+```
+
+```{r}
+ggsave("08_eda_sex_age.png",
+       plot = eda_sex_age,
+       device = "png",
+       path = here("03_outputs", "03_outputs_graphs"),
+       dpi = 300,
+       width = 25,
+       height = 15,
+       units = c("cm")
+       )
+```
+
+
+## Save data
+
+```{r}
+saveRDS(data_clean, 
+        file = here("01_data", "02_data_processed",
+                    "03_data_clean.rds")
+        )
+```
+
+
+
