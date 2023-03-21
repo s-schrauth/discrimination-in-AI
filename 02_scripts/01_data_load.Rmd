@@ -1,0 +1,55 @@
+---
+title: "Load Data"
+author: "Simon Schrauth"
+date: "`r Sys.Date()`"
+output: html_document
+---
+# Load Compas Dataset
+
+## Goal
+
+After executing this script, the compas dataset should be loaded.
+
+## Install packages
+
+```{r}
+pacman::p_load(RSQLite,
+               tidyverse, 
+               here)
+```
+
+## Load data from csv-file
+
+```{r}
+data_recid_raw = read_csv(file = here("01_data", "01_data_raw",
+                                      "compas-scores-two-years.csv"),
+                         col_names = TRUE,
+                         na = c(""))
+
+data_recid_raw
+```
+
+```{r}
+data_voil_raw = read_csv(file = here("01_data", "01_data_raw",
+                                     "compas-scores-two-years-violent.csv"),
+                         col_names = TRUE,
+                         na = c(""))
+
+data_voil_raw
+```
+
+
+## Save data
+
+```{r}
+saveRDS(data_recid_raw, 
+        file = here("01_data", "02_data_processed",
+                    "01_data_recid_load.rds")
+        )
+
+saveRDS(data_voil_raw, 
+        file = here("01_data", "02_data_processed",
+                    "02_data_viol_load.rds")
+        )
+```
+

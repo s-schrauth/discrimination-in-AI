@@ -1,0 +1,2 @@
+Methodology in text form: https://www.propublica.org/article/how-we-analyzed-the-compas-recidivism-algorithm
+Methodology in code form: https://github.com/propublica/compas-analysis/blob/master/Compas%20Analysis.ipynb
