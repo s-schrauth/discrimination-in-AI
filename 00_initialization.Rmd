@@ -1,0 +1,47 @@
+---
+title: "Initialization"
+author: "Simon Schrauth"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Technical Initialization of the Project
+
+## Goal
+
+After executing this script, one has the technical set-up which allows the reproduction of the project. This includes the installation of all R-packages used in this project in the correct versions.
+
+## R & R-Packages
+
+only for Windows
+(installation of Rtools, a windows specific programm for package downloading, and the stringi package as it causes trouble downloaded otherwise)
+
+```{r}
+if(!require(installr)) install.packages("installr")
+if(!require(remotes)) install.packages("remotes")
+
+installr::install.Rtools(check = TRUE, check_r_update = FALSE)
+
+# ifelse(!require(stringi),
+#        remotes::install_version("stringi", version = "1.7.8", upgrade="never"),
+#        if(packageVersion("stringi")!="1.7.8") remotes::install_version("stringi", version = "1.7.8", upgrade="never")
+#        )
+```
+
+For the automated installation of R and the R-packages, the renv-package is used. After cloning the complete repo (including the renv folder and the renv.lock file) and executing the following command, every R-package used in this project should be installed (if not already installed on the local computer).
+
+```{r}
+renv::restore()
+```
+
+## Pandoc for RMarkdown
+
+Pandoc is an external program which is used by RMarkdown. As it is prone to trouble through different versions, the Pandoc version will be fixed for this project through the following commands.
+
+```{r}
+library(pandoc)
+library(gh)
+
+pandoc::pandoc_install("2.19.2")
+pandoc::pandoc_activate("2.19.2")
+```
