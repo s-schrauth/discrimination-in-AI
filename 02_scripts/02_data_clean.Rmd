@@ -17,7 +17,6 @@ After executing this script, the compas dataset should be cleaned and ready for 
 pacman::p_load(tidyverse, 
                here,
                naniar,
-               reticulate,
                lubridate,
                wesanderson,
                ggdist)
@@ -93,6 +92,8 @@ data_clean = data_raw %>%
                           race,
                           charge_degree),
                 .fns = ~ factor(.))) %>% 
+  mutate(sex = fct_relevel(sex, "Male", after = 0)) %>% 
+  mutate(race = fct_relevel(race, "Caucasian", after = 0)) %>% 
   select(!c(days_b_screening_arrest,
             c_jail_in,
             c_jail_out,
@@ -361,7 +362,7 @@ eda_sex_age = data_clean %>%
   ggplot(aes(x = sex, y = age, fill = sex)) +
   ggdist::stat_halfeye(
     adjust = 0.75,
-    justification = -.09,
+    justification = -.05,
     .width = 0,
     point_colour = NA
   ) +

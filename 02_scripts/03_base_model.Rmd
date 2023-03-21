@@ -1,0 +1,76 @@
+---
+title: "Base Model"
+author: "Simon Schrauth"
+date: "`r Sys.Date()`"
+output: html_document
+---
+# Model Compas Dataset
+
+## Goal
+
+After executing this script, the base model (logistic regression) for the COMPAS data set should be completed.
+
+## Install packages
+
+```{r}
+pacman::p_load(tidyverse, 
+               here,
+               tidymodels)
+
+tidymodels_prefer()
+```
+
+## Load data
+
+```{r}
+data_clean = readRDS(here("01_data", "02_data_processed",
+                          "03_data_clean.rds"))
+```
+
+## Data preparation
+
+# Test-Train-Split for Evaluation
+```{r}
+data_clean = data_clean %>% 
+  mutate(two_year_recid = factor(two_year_recid))
+set.seed(28934839)
+splits = initial_split(data_clean,
+                       prop = 0.9,
+                       strata = two_year_recid)
+
+data_train = training(splits)
+data_test = testing(splits)
+```
+
+# Final Data Transformation
+```{r}
+recipe = recipe(two_year_recid ~ .,
+                data = data_train) %>% 
+  step_dummy(all_nominal_predictors())
+```
+
+## Modelling (Logistic Regression)
+
+```{r}
+model = logistic_reg() %>% 
+  set_engine("glm") %>% 
+  set_mode("classification")
+
+workflow = workflow() %>% 
+  add_model(model) %>% 
+  add_recipe(recipe)
+
+model_fit = 
+  workflow %>% 
+  fit(data = data_train)
+
+tidy(model_fit, exponentiate = TRUE)
+
+model_out_of_sample_fit = 
+  workflow %>% 
+  last_fit(splits) %>% 
+  collect_metrics()
+
+model_out_of_sample_fit
+```
+
