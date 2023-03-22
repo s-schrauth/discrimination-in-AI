@@ -40,6 +40,20 @@ data_train = training(splits)
 data_test = testing(splits)
 ```
 
+Save Training and Testing Data
+```{r}
+saveRDS(data_train, 
+        file = here("01_data", "02_data_processed",
+                    "04_data_train.rds")
+        )
+
+saveRDS(data_test, 
+        file = here("01_data", "02_data_processed",
+                    "05_data_test.rds")
+        )
+```
+
+
 # Final Data Transformation
 ```{r}
 recipe = recipe(compas ~ .,
@@ -82,7 +96,7 @@ model_out_of_sample_fit
 ```{r}
 saveRDS(model_fit, 
         file = here("01_data", "02_data_processed",
-                    "04_model_fit.rds")
+                    "06_model_fit.rds")
         )
 ```
 

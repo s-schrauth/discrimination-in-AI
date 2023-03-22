@@ -45,3 +45,4 @@ library(gh)
 pandoc::pandoc_install("2.19.2")
 pandoc::pandoc_activate("2.19.2")
 ```
+
