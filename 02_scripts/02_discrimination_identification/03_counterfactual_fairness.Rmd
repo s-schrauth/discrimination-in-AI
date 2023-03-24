@@ -54,13 +54,12 @@ data_counter = data_train %>%
          Priors = priors_count,
          Crime = charge_degree,
          COMPAS = compas) %>% 
-  dummy_cols(select_columns = "Race",
-             remove_first_dummy = TRUE,
+  dummy_cols(select_columns = c("Race", "Sex"),
+             remove_first_dummy = FALSE,
              remove_selected_columns = TRUE) %>% 
   rename("Race_Native_American" = "Race_Native American",
          "Race_African_American" = "Race_African-American") %>% 
-  mutate(Sex = ifelse(Sex == "Female", 1, 0),
-         Crime = ifelse(Crime == "F", 1, 0),
+  mutate(Crime = ifelse(Crime == "F", 1, 0),
          COMPAS = ifelse(COMPAS == "High", 1, 0)) 
 ```
 
@@ -151,11 +150,11 @@ dag2 = dagitty('dag {
   Age [exposure,pos="0,-2"]
   Sex [pos="0,-1"]
   Race [pos="0,0"]
-  Priors [pos="0.5, -1.75"]
-  Crime [pos="1, -1.75"]
+  Priors [pos="0.5, -1.5"]
+  Crime [pos="1, -1.5"]
   U_D [latent,pos="2, -1.5"]
-  JuvMisd [pos="0.5, -0.25"]
-  JuvFel [pos="1,-0.25"]
+  JuvMisd [pos="0.5, -0.5"]
+  JuvFel [pos="1,-0.5"]
   U_J [latent,pos="2, -0.5"]
   COMPAS [outcome,pos="1.5,-1"]
   Race -> Priors
@@ -228,43 +227,56 @@ ggsave("XX_dag2.png",
 ```
 
 
-## Build Structural Causal Model
+## Build Structural Causal Model via Bayesian Estimation
+## with RStan (adapted code from https://github.com/mkusner/counterfactual-fairness)
+
+# Prepare data for modelling with Stan
 ```{r}
-scm = '
-  U_D =~ Priors + Crime
-  U_J =~ JuvMisd + JuvFel
-  
-  COMPAS ~ Race_African_American + Race_Asian + Race_Hispanic + Race_Native_American + Race_Other + Sex + Age + U_D + Priors + Crime + JuvMisd + JuvFel
-  JuvMisd ~ Race_African_American + Race_Asian + Race_Hispanic + Race_Native_American + Race_Other + Sex + Age + U_J 
-  JuvFel ~ Race_African_American + Race_Asian + Race_Hispanic + Race_Native_American + Race_Other + Sex + Age + U_J
-  Priors ~ Race_African_American + Race_Asian + Race_Hispanic + Race_Native_American + Race_Other + Sex + Age + U_D
-  Crime ~ Race_African_American + Race_Asian + Race_Hispanic + Race_Native_American + Race_Other + Sex + Age + U_D
-'
+data_counter_protected = data_counter %>% 
+  select(starts_with(c("Race_", "Sex_"))) 
+
+n = nrow(data_counter)
+
+data_counter_list = list(N = n,
+                         K = length(data_counter_protected),
+                         prot = data.matrix(data_counter_protected),
+                         age = data_counter[, "Age", drop = TRUE],
+                         priors = data_counter[, "Priors", drop = TRUE],
+                         crime = data_counter[, "Crime", drop = TRUE],
+                         juvmisd = data_counter[, "JuvMisd", drop = TRUE],
+                         juvfel = data_counter[, "JuvFel", drop = TRUE],
+                         compas = data_counter[, "COMPAS", drop = TRUE])
+```
+
+# Fit model
+```{r}
+fit_counter <- stan(file = here("02_scripts", "02_discrimination_identification",
+                                "04_counterfactual_fairness_stan.stan"), 
+                    data = data_counter_list, 
+                    iter = 2000, 
+                    chains = 4,
+                    verbose = TRUE)
+```
+
+# Save model
+```{r}
+saveRDS(fit_counter, 
+        file = here("01_data", "02_data_processed",
+                    "XX_model_fit_counter.rds")
+        )
 ```
 
 ```{r}
-scm = '
-  U_D =~ Priors + Crime
-  U_J =~ JuvMisd + JuvFel
-  
-  COMPAS ~ Race_African_American + Race_Asian + Race_Hispanic + Race_Native_American + Race_Other + Sex + Age + U_D 
-'
+model_counter = extract(fit_counter)
+
+uj_est = colMeans(model_counter$u_j)
+mean(model_counter$compas_ud)
+
 ```
 
 ```{r}
-scm_fit = sem(model = scm,
-              data = data_counter)
-
-summary(scm_fit)
-
-lavPredict(scm_fit)
+saveRDS(model_counter, 
+        file = here("01_data", "02_data_processed",
+                    "XX_model_counter.rds")
+        )
 ```
-
-```{r}
-example(stan_model, package = "rstan", run.dontrun = TRUE)
-```
-
-```{r}
-
-```
-
