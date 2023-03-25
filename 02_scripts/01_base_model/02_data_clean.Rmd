@@ -25,7 +25,7 @@ pacman::p_load(tidyverse,
 ## Load data
 
 ```{r}
-data_raw = readRDS(here("01_data", "02_data_processed",
+data_raw = readRDS(here("01_data", "02_data_processed", "01_base_model",
                         "01_data_recid_load.rds"))
 ```
 
@@ -154,7 +154,7 @@ eda_class
 ggsave("01_eda_class.png",
        plot = eda_class,
        device = "png",
-       path = here("03_outputs", "03_outputs_graphs"),
+       path = here("03_outputs", "01_base_model"),
        dpi = 300,
        width = 25,
        height = 15,
@@ -181,7 +181,7 @@ eda_race
 ggsave("02_eda_race.png",
        plot = eda_race,
        device = "png",
-       path = here("03_outputs", "03_outputs_graphs"),
+       path = here("03_outputs", "01_base_model"),
        dpi = 300,
        width = 25,
        height = 15,
@@ -236,7 +236,7 @@ eda_age_hist
 ggsave("03_eda_age_raincloud.png",
        plot = eda_age_raincloud,
        device = "png",
-       path = here("03_outputs", "03_outputs_graphs"),
+       path = here("03_outputs", "01_base_model"),
        dpi = 300,
        width = 25,
        height = 15,
@@ -246,7 +246,7 @@ ggsave("03_eda_age_raincloud.png",
 ggsave("04_eda_age_hist.png",
        plot = eda_age_hist,
        device = "png",
-       path = here("03_outputs", "03_outputs_graphs"),
+       path = here("03_outputs", "01_base_model"),
        dpi = 300,
        width = 25,
        height = 15,
@@ -273,7 +273,7 @@ eda_sex
 ggsave("05_eda_sex.png",
        plot = eda_sex,
        device = "png",
-       path = here("03_outputs", "03_outputs_graphs"),
+       path = here("03_outputs", "01_base_model"),
        dpi = 300,
        width = 15,
        height = 15,
@@ -310,7 +310,7 @@ eda_race_sex
 ggsave("06_eda_race_sex.png",
        plot = eda_race_sex,
        device = "png",
-       path = here("03_outputs", "03_outputs_graphs"),
+       path = here("03_outputs", "01_base_model"),
        dpi = 300,
        width = 25,
        height = 15,
@@ -351,7 +351,7 @@ eda_race_age
 ggsave("07_eda_race_age.png",
        plot = eda_race_age,
        device = "png",
-       path = here("03_outputs", "03_outputs_graphs"),
+       path = here("03_outputs", "01_base_model"),
        dpi = 300,
        width = 25,
        height = 15,
@@ -391,7 +391,7 @@ eda_sex_age
 ggsave("08_eda_sex_age.png",
        plot = eda_sex_age,
        device = "png",
-       path = here("03_outputs", "03_outputs_graphs"),
+       path = here("03_outputs", "01_base_model"),
        dpi = 300,
        width = 25,
        height = 15,
@@ -404,7 +404,7 @@ ggsave("08_eda_sex_age.png",
 
 ```{r}
 saveRDS(data_clean, 
-        file = here("01_data", "02_data_processed",
+        file = here("01_data", "02_data_processed", "01_base_model",
                     "03_data_clean.rds")
         )
 ```

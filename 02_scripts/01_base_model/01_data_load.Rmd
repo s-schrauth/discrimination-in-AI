@@ -1,4 +1,3 @@
----
 title: "Load Data"
 author: "Simon Schrauth"
 date: "`r Sys.Date()`"
@@ -43,12 +42,12 @@ data_voil_raw
 
 ```{r}
 saveRDS(data_recid_raw, 
-        file = here("01_data", "02_data_processed",
+        file = here("01_data", "02_data_processed", "01_base_model",
                     "01_data_recid_load.rds")
         )
 
 saveRDS(data_voil_raw, 
-        file = here("01_data", "02_data_processed",
+        file = here("01_data", "02_data_processed", "01_base_model",
                     "02_data_viol_load.rds")
         )
 ```

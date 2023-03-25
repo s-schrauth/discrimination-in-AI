@@ -98,4 +98,3 @@ model {
   
   compas  ~ bernoulli_logit(compas_bias + compas_ud * u_d + compas_age * age + prot * compas_prot);
 }
-

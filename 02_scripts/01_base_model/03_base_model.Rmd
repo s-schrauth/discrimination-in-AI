@@ -23,7 +23,7 @@ tidymodels_prefer()
 ## Load data
 
 ```{r}
-data_clean = readRDS(here("01_data", "02_data_processed",
+data_clean = readRDS(here("01_data", "02_data_processed", "01_base_model",
                           "03_data_clean.rds"))
 ```
 
@@ -43,12 +43,12 @@ data_test = testing(splits)
 Save Training and Testing Data
 ```{r}
 saveRDS(data_train, 
-        file = here("01_data", "02_data_processed",
+        file = here("01_data", "02_data_processed", "01_base_model",
                     "04_data_train.rds")
         )
 
 saveRDS(data_test, 
-        file = here("01_data", "02_data_processed",
+        file = here("01_data", "02_data_processed", "01_base_model",
                     "05_data_test.rds")
         )
 ```
@@ -95,7 +95,7 @@ model_out_of_sample_fit
 
 ```{r}
 saveRDS(model_fit, 
-        file = here("01_data", "02_data_processed",
+        file = here("01_data", "02_data_processed", "01_base_model",
                     "06_model_fit.rds")
         )
 ```
