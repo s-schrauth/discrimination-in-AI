@@ -64,6 +64,7 @@ data_counter = data_train %>%
          COMPAS = ifelse(COMPAS == "High", 1, 0)) 
 
 colors = wes_palette("Darjeeling1")
+colors_discrete = rep(wes_palette("Darjeeling1"), 3)
 ```
 
 
@@ -147,20 +148,22 @@ ggsave("01_dag.png",
 ```
 
 
+
+
 ## Build Structural Causal Model via Bayesian Estimation
 ## with RStan (adapted code from https://github.com/mkusner/counterfactual-fairness)
 
-# Prepare data for modelling with Stan
+# Prepare data for base model
 ```{r}
-data_counter_protected = data_counter %>% 
+data_base_protected = data_counter %>% 
   select(starts_with(c("Race_", "Sex_"))) 
 
 n = nrow(data_counter)
 
 
-data_counter_list = list(N = n,
-                         K = length(data_counter_protected),
-                         prot = data.matrix(data_counter_protected),
+data_base_list = list(N = n,
+                         K = length(data_base_protected),
+                         prot = data.matrix(data_base_protected),
                          age = data_counter[, "Age", drop = TRUE],
                          priors = data_counter[, "Priors", drop = TRUE],
                          crime = data_counter[, "Crime", drop = TRUE],
@@ -171,187 +174,312 @@ data_counter_list = list(N = n,
 
 # Fit model
 ```{r}
-fit_counter = stan(file = here("02_scripts", "04_counterfactual",
-                               "02_counterfactual_model_stan.stan"), 
-                    data = data_counter_list, 
-                    iter = 200, # mind. 2000!!!
-                    chains = 4,
-                    seed = 1216334198,
-                    verbose = TRUE)
+fit_base = stan(file = here("02_scripts", "04_counterfactual",
+                            "02_counterfactual_model_base.stan"), 
+                data = data_base_list, 
+                iter = 200, # mind. 2000!!!
+                chains = 4,
+                seed = 1216334198,
+                verbose = TRUE)
 
-params_counter = extract(fit_counter)
+params_base = extract(fit_base)
 ```
 
-
-
-# Save model
+# Save base model
 ```{r}
-saveRDS(fit_counter, 
+saveRDS(fit_base, 
         file = here("01_data", "02_data_processed", "04_counterfactual",
-                    "01_model_counter_fit.rds")
+                    "01_model_base_fit.rds")
         )
 
-saveRDS(params_counter, 
+saveRDS(params_base, 
         file = here("01_data", "02_data_processed", "04_counterfactual",
-                    "02_model_counter_params.rds")
+                    "02_model_base_params.rds")
         )
 
-fit_counter = readRDS( 
-        file = here("01_data", "02_data_processed", "04_counterfactual",
-                    "01_model_counter_fit.rds")
+fit_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual",
+                               "01_model_base_fit.rds")
         )
 
-params_counter = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual",
-                                     "02_model_counter_params.rds")
+params_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual",
+                                  "02_model_base_params.rds")
         )
 ```
 
-# Plot model weights
 ```{r}
-param_names = function(col){
+# U_d parameter überprüfen
 
-  pattern = c("_prot\\[1\\]", 
-              "_prot\\[2\\]",
-              "_prot\\[3\\]",
-              "_prot\\[4\\]",
-              "_prot\\[5\\]",
-              "_prot\\[6\\]",
-              "_prot\\[7\\]",
-              "_prot\\[8\\]")
+s = sample(seq(1,5553), 50)
+
+pc = as.data.frame(params_counter)[,s] %>% 
+  pivot_longer(cols = everything())
+
+pc %>% 
+  ggplot(aes(x = name, y = value, fill = name)) +
+  ggdist::stat_halfeye(
+    adjust = 0.75,
+    justification = -.05,
+    .width = 0,
+    point_colour = NA
+     ) +
+  guides(fill = "none") +
+  coord_flip() 
+```
+
+
+# Compute median and median absolute deviaten (mad) of U_d and U_j distributions for all cases
+```{r}
+u_d = params_counter %>% 
+  as.data.frame() %>% 
+  select(starts_with(c("u_d"))) %>% 
+  summarise(across(.cols = everything(),
+                   .fns = list(median = median, mad = mad),
+                   .names = "{.col}-{.fn}"))  %>% 
+  pivot_longer(cols = everything(),
+               names_to = c("case", "metric"),
+               names_sep = "-") %>% 
+  mutate(case = as.numeric(str_replace(case, "u_d.(\\d*)", "\\1"))) %>% 
+  pivot_wider(names_from = "metric",
+              values_from = "value")
+
+u_j = params_counter %>% 
+  as.data.frame() %>% 
+  select(starts_with(c("u_j"))) %>% 
+  summarise(across(.cols = everything(),
+                   .fns = list(median = median, mad = mad),
+                   .names = "{.col}-{.fn}")) %>% 
+  pivot_longer(cols = everything(),
+               names_to = c("case", "metric"),
+               names_sep = "-") %>% 
+  mutate(case = as.numeric(str_replace(case, "u_j.(\\d*)", "\\1"))) %>% 
+  pivot_wider(names_from = "metric",
+              values_from = "value")
+```
+
+```{r}
+saveRDS(u_d, 
+        file = here("01_data", "02_data_processed", "04_counterfactual",
+                    "03_ud.rds")
+        )
+
+saveRDS(u_j, 
+        file = here("01_data", "02_data_processed", "04_counterfactual",
+                    "04_uj.rds")
+        )
+
+u_d = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual",
+                          "03_ud.rds")
+        )
+
+u_j = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual",
+                          "04_uj.rds")
+        )
+```
+
+## Counterfactual Analysis
+# Function definitions
+Function for modelling
+```{r}
+model_counter = function(data, 
+                         u_d = u_d, 
+                         u_j = u_j, 
+                         iter = 2000, 
+                         chains = 4, 
+                         seed = 34568979){
   
-  replacement = c("_Race: Caucasian",
-                  "_Race: African-American",
-                  "_Race: Asian",
-                  "_Race: Hispanic",
-                  "_Race: Native-American",
-                  "_Race: Other",
-                  "_Sex: Male",
-                  "_Sex: Female")
+  # Define protected variables
+  data_prot = data %>% 
+    select(starts_with(c("Race_", "Sex_"))) 
   
-  for (i in 1:length(pattern)){
-    col = str_replace(col, pattern[i], replacement[i])
+  n = nrow(data)
+
+  # Create list for Stan file
+  data_list= list(N = n,
+                  K = length(data_prot),
+                  prot = data.matrix(data_prot),
+                  age = data[, "Age", drop = TRUE],
+                  priors = data[, "Priors", drop = TRUE],
+                  crime = data[, "Crime", drop = TRUE],
+                  juvmisd = data[, "JuvMisd", drop = TRUE],
+                  juvfel = data[, "JuvFel", drop = TRUE],
+                  compas = data[, "COMPAS", drop = TRUE],
+                  mu_d = u_d[, "median", drop = TRUE],
+                  sigma_d = u_d[, "mad", drop = TRUE],
+                  mu_j = u_j[, "median", drop = TRUE],
+                  sigma_j = u_j[, "mad", drop = TRUE])
+  
+  # Calculate model with Stan
+  fit = stan(file = here("02_scripts", "04_counterfactual",
+                         "03_counterfactual_model_general.stan"), 
+             data = data_list, 
+             iter = iter,
+             chains = chains,
+             seed = seed,
+             verbose = TRUE)
+  
+  # Extract model parameter/weight distribution
+  params = extract(fit)
+  
+  output = list(fit = fit,
+                params = params)
+  
+  return(output)
+}
+```
+
+Functions for Weight Plotting
+```{r}
+# Function for correct naming of protected variables
+  param_names = function(col){
+  
+    pattern = c("_prot.1", 
+                "_prot.2",
+                "_prot.3",
+                "_prot.4",
+                "_prot.5",
+                "_prot.6",
+                "_prot.7",
+                "_prot.8")
+    
+    replacement = c("_Race: Caucasian",
+                    "_Race: African-American",
+                    "_Race: Asian",
+                    "_Race: Hispanic",
+                    "_Race: Native-American",
+                    "_Race: Other",
+                    "_Sex: Male",
+                    "_Sex: Female")
+    
+    for (i in 1:length(pattern)){
+      col = str_replace(col, pattern[i], replacement[i])
+    }
+    
+    return(col)
   }
+
+# Function for plot of compas weights (except age variable)
+plot_compas_weights = function(data, plot_text){
   
-  return(col)
+  colors_discrete = rep(wes_palette("Darjeeling1"), 3)
+  
+  plot = data %>% 
+     as.data.frame() %>% 
+     select(starts_with("compas"),
+            -c("compas_age")) %>% 
+     rename_with(.cols = everything(), 
+                 .fn = ~ param_names(.x)) %>%
+     rename_with(.cols = everything(), 
+                 .fn = ~ str_replace(.x, "compas_", "")) %>% 
+     rename_with(.cols = everything(), 
+                 .fn = ~ str_replace(.x, "bias", "Bias")) %>% 
+     rename_with(.cols = everything(), 
+                 .fn = ~ str_replace(.x, "ud", "Ud")) %>%   
+     pivot_longer(cols = everything()) %>%
+     ggplot(aes(x = name, y = value, fill = name)) +
+        ggdist::stat_halfeye(
+          adjust = 0.75,
+          justification = -.05,
+          .width = 0,
+          point_colour = NA
+        ) +
+        geom_boxplot(
+          width = .12,
+          outlier.colour = NA,
+          alpha = 0.5
+        ) +
+        geom_abline(intercept = 0, slope = 0) +
+        scale_fill_manual(values = colors_discrete) +
+        guides(fill = "none") +
+        labs(title = "Posterior Distribution of Model Weights",
+             subtitle = paste0("Only Weights for COMPAS Equation (without Age) for ", plot_text),
+             y = "Weight Value",
+             x = "Weight for COMPAS Prediction") +
+        coord_flip() 
+  
+  return(plot)
 }
 
-plot_weights = fit_counter %>% 
-                        as.data.frame() %>% 
-                        select(starts_with("compas"),
-                               -c("compas_age")) %>% 
-                        rename_with(.cols = everything(), 
-                                    .fn = ~ param_names(.x)) %>% 
-                        rename_with(.cols = everything(), 
-                                    .fn = ~ str_replace(.x, "compas_", "")) %>% 
-                        rename_with(.cols = everything(), 
-                                    .fn = ~ str_replace(.x, "bias", "Bias")) %>% 
-                        rename_with(.cols = everything(), 
-                                    .fn = ~ str_replace(.x, "ud", "Ud")) %>%   
-                        pivot_longer(cols = everything()) %>%
-                        ggplot(aes(x = name, y = value, fill = name)) +
-                          ggdist::stat_halfeye(
-                          adjust = 0.75,
-                          justification = -.05,
-                          .width = 0,
-                          point_colour = NA
-                        ) +
-                        geom_boxplot(
-                          width = .12,
-                          outlier.colour = NA,
-                          alpha = 0.5
-                        ) +
-                        geom_abline(intercept = 0, slope = 0) +
-                        scale_fill_manual(values = colors_discrete) +
-                        guides(fill = "none") +
-                        labs(title = "Posterior Distribution of Model Weights",
-                             subtitle = "Only Weights for COMPAS Equation (without Age)",
-                             y = "Weight Value",
-                             x = "Weight for COMPAS Prediction") +
-                        ylim(-2.5, 3) + ###anpassen!!!!
-                        coord_flip() 
-                        
+# Function for plot of compas weights (only age variable)
+plot_compas_weights_age = function(data, plot_text, ymin = -0.5, ymax = 0){
+  
+  colors_discrete = rep(wes_palette("Darjeeling1"), 3)
+  
+  plot = data %>% 
+     as.data.frame() %>% 
+     select(c("compas_age")) %>% 
+     rename_with(.cols = everything(), 
+                 .fn = ~ str_replace(.x, "compas_age", "Age")) %>% 
+     rename_with(.cols = everything(), 
+                 .fn = ~ param_names(.x)) %>%
+     rename_with(.cols = everything(), 
+                 .fn = ~ str_replace(.x, "compas_", "")) %>% 
+     rename_with(.cols = everything(), 
+                 .fn = ~ str_replace(.x, "bias", "Bias")) %>% 
+     rename_with(.cols = everything(), 
+                 .fn = ~ str_replace(.x, "ud", "Ud")) %>%   
+     pivot_longer(cols = everything()) %>%
+     ggplot(aes(x = name, y = value, fill = name)) +
+        ggdist::stat_halfeye(
+          adjust = 0.75,
+          justification = -.05,
+          .width = 0,
+          point_colour = NA
+        ) +
+        geom_boxplot(
+          width = .12,
+          outlier.colour = NA,
+          alpha = 0.5
+        ) +
+        geom_abline(intercept = 0, slope = 0) +
+        scale_fill_manual(values = colors_discrete) +
+        guides(fill = "none") +
+        ylim(ymin, ymax) +
+        labs(title = "Posterior Distribution of Model Weights",
+             subtitle = paste0("Only Weights for COMPAS Equation (only Age) for ", plot_text),
+             y = "Weight Value",
+             x = "Weight for COMPAS Prediction") +
+        coord_flip() 
+  
+  return(plot)
+}
 
-plot_weights_age = fit_counter %>% 
-                            as.data.frame() %>% 
-                            select(c("compas_age")) %>% 
-                            rename_with(.cols = everything(), 
-                                        .fn = ~ str_replace(.x, "compas_age", "Age")) %>% 
-                            pivot_longer(cols = everything()) %>%
-                            ggplot(aes(x = name, y = value, fill = name)) +
-                              ggdist::stat_halfeye(
-                              adjust = 0.75,
-                              justification = -.05,
-                              .width = 0,
-                              point_colour = NA
-                            ) +
-                            geom_boxplot(
-                              width = .12,
-                              outlier.colour = NA,
-                              alpha = 0.5
-                            ) +
-                            geom_abline(intercept = 0, slope = 0) +
-                            scale_fill_manual(values = colors_discrete) +
-                            guides(fill = "none") +
-                            labs(title = "Posterior Distribution of Model Weights",
-                                 subtitle = "Only Weights for COMPAS Equation (only Age)",
-                                 y = "Weight Value",
-                                 x = "Weight for COMPAS Prediction") +
-                            ylim(-0.5, 0) + ###anpassen!!!!
-                            coord_flip()
-
-table_weights = fit_counter %>% 
-                  as.data.frame() %>% 
-                  select(-starts_with("u_d"), 
-                         -starts_with("u_j"), 
-                         -lp__) %>% 
-                  rename_with(.cols = everything(), 
-                              .fn = ~ param_names(.x)) %>% 
-                  summarise(across(everything(),
-                                   list(median = median,
-                                        mad = mad))) %>% 
-                  round(digits = 2) %>% 
-                  pivot_longer(cols = everything(),
-                               names_to = c("variable",
-                                            "metric"),
-                               names_pattern = "(.*)_([a-z]*)$") %>% 
-                  pivot_wider(names_from = "variable") %>% 
-                  column_to_rownames(var = "metric")
-
+# Function for table of the median and mad of all weights
+weight_table = function(data){
+  data %>% 
+    as.data.frame() %>% 
+    select(-starts_with("u_d"), 
+           -starts_with("u_j"), 
+           -lp__) %>% 
+    rename_with(.cols = everything(), 
+                .fn = ~ param_names(.x)) %>% 
+    summarise(across(everything(),
+                     list(median = median,
+                          mad = mad))) %>% 
+    round(digits = 2) %>% 
+    pivot_longer(cols = everything(),
+                 names_to = c("variable",
+                              "metric"),
+                 names_pattern = "(.*)_([a-z]*)$") %>% 
+    pivot_wider(names_from = "variable") %>% 
+    column_to_rownames(var = "metric")
+}
 ```
 
+Functions for Prediction & Plotting
+(adapted code from https://medium.com/@alex.pavlakis/making-predictions-from-stan-models-in-r-3e349dfac1ed)
 ```{r}
-ggsave("02_plot_weights.png",
-       plot = plot_weights,
-       device = "png",
-       path = here("03_outputs", "04_counterfactual"),
-       dpi = 300,
-       width = 40,
-       height = 30,
-       units = c("cm")
-       )
-
-ggsave("03_plot_weights_age.png",
-       plot = plot_weights_age,
-       device = "png",
-       path = here("03_outputs", "04_counterfactual"),
-       dpi = 300,
-       width = 25,
-       height = 10,
-       units = c("cm")
-       )
-
-```
-
-
-
-# Prediction
-# adapted code from https://medium.com/@alex.pavlakis/making-predictions-from-stan-models-in-r-3e349dfac1ed
-```{r}
-gen_quant_r = function(data, params_df, fun){
+# Function for prediction of logit values of given data frame
+prediction_counter_logit = function(data, params_df, fun){
+  
+  # Only U_d, U_j and compas weights are relevant
   params_df_new = params_df %>% 
     select(starts_with(c("u_", "compas_")))
+  
+  # Sample a parameter set for each observation
   params_ind = sample(seq(1, nrow(params_df_new)), size = nrow(data), replace = TRUE) 
   params = params_df[params_ind,]
+  
+  # Define certain parameter and variable data frames
   param_prot = params %>% 
     select(starts_with("compas_prot"))
   
@@ -364,94 +492,206 @@ gen_quant_r = function(data, params_df, fun){
     as.matrix() %>% 
     t()
   
+  # Create empty matrix for results
   inv_logit_raw = matrix(NA,
                          nrow = nrow(data),
                          ncol = ncol(data_ud)) 
   
+  # Loop over all possible U_d values (4000 per observation)
   for (i in 1:ncol(data_ud)) {
-      lin_comb = params$compas_bias + params$compas_age * data$Age + 
-             rowSums(param_prot * data_prot) +
-             as.vector(params$compas_ud * data_ud[,i])
+    
+      # Calculate linear combination for COMPAS equation for all observations
+      lin_comb = params$compas_bias + 
+                 params$compas_age * data$Age + 
+                 rowSums(param_prot * data_prot) +
+                 as.vector(params$compas_ud * data_ud[,i])
   
+      # Calculate logit for all observations
       inv_logit_raw[,i] = 1/(1 + exp(-lin_comb))
   }
 
+  # Summarise logits over all possible U_d values with function "fun" (e.g. median)
   inv_logit = apply(inv_logit_raw, 1, fun)
   
   return(inv_logit)
 }
 
-set.seed(239845783)
-counter_pred_logit_base = gen_quant_r(params_df = params_counter %>% as.data.frame(),
-                                      data = data_counter,
-                                      fun = "median")
-
-threshold = 0.5
-
-counter_pred_base = ifelse(counter_pred_logit_base >= threshold, 1, 0)
-```
-
-```{r}
-accuracy = mean((counter_pred_base == data_counter$COMPAS))
-accuracy
-
-colors = wes_palette("Darjeeling1")
-
-plot_counter_pred_logit_base = counter_pred_logit_base %>% 
-  as_tibble() %>% 
-  rename(logit = value) %>% 
-  ggplot(aes()) +
-  geom_histogram(aes(x = logit, y = after_stat(density)), 
-                 bins = 30, 
-                 fill = colors[2],
-                 alpha = 0.3) +
-  geom_density(aes(x = logit),
-               size = 1,
-               color = colors[2]) +
-  labs(title = "Predicted Values for Probabilites of a High COMPAS Score",
-       subtitle = "Histogram and Density Function for Original Data",
-       x = "Predicted Probability of a High COMPAS Score",
-       y = "Density") 
+# Function for prediction dataframes and prediction plots (incl. weights) 
+prediction_counter = function(params_df, 
+                              data, 
+                              threshold = 0.5, 
+                              seed = 3928567, 
+                              ymin_age_weight = -0.5,
+                              ymax_age_weight = 0,
+                              color_nr,
+                              plot_text,
+                              plot_text_bin,
+                              plot_ylim = 3500,
+                              plot_org_logit = NULL,
+                              plot_org_bin = NULL){
   
-
-plot_counter_pred_base = counter_pred_base %>% 
-  as_tibble() %>% 
-  group_by(value) %>% 
-  summarise(n = n()) %>% 
-  mutate(value = factor(value, levels = c(0,1), labels = c("Low", "High"))) %>% 
-  ggplot(aes(x = value, y = n)) +
-  geom_col(fill = colors[2]) +
-  labs(title = "Predicted Values for COMPAS Score",
-       subtitle = "Absolute Frequency of Predicted Score Values for Original Data",
-       x = "COMPAS Score",
-       y = "Predicted Frequency")
+  # Calculate predicted values for logits and COMPAS score
+  set.seed(seed)
+  counter_pred_logit = prediction_counter_logit(params_df = params_df %>% as.data.frame(),
+                                                data = data_counter,
+                                                fun = "median")
+  
+  counter_pred = ifelse(counter_pred_logit >= threshold, 1, 0)
+  
+  # Calculate accuracy of prediction
+  accuracy = mean((counter_pred == data$COMPAS))
+  
+  # Plots for weights
+  plot_compas_weights = plot_compas_weights(data = params_df, 
+                                            plot_text = plot_text)
+  
+  plot_compas_weights_age = plot_compas_weights_age(data = params_df, 
+                                                    plot_text = plot_text, 
+                                                    ymin = ymin_age_weight, 
+                                                    ymax = ymax_age_weight)
+  weight_table = weight_table(data = params_df)
+  
+  
+  ## Plots for predictions
+  colors = wes_palette("Darjeeling1")
+  
+  # Plot for predicted logits
+  plot_counter_logit = counter_pred_logit %>% 
+    as_tibble() %>% 
+    rename(logit = value) %>% 
+    ggplot(aes()) +
+    geom_histogram(aes(x = logit, y = after_stat(density)), 
+                   bins = 30, 
+                   fill = colors[color_nr],
+                   alpha = 0.3) +
+    geom_density(aes(x = logit),
+                 linewidth = 1,
+                 color = colors[color_nr]) +
+    labs(title = "Predicted Values for Probabilites of a High COMPAS Score",
+         subtitle = paste0("Histogram and Density Function for ", plot_text),
+         x = "Predicted Probability of a High COMPAS Score",
+         y = "Density") 
+  
+  # Plot for predicted COMPAS score
+  plot_counter_bin = counter_pred %>% 
+    as_tibble() %>% 
+    group_by(value) %>% 
+    summarise(n = n()) %>% 
+    mutate(value = factor(value, levels = c(0,1), labels = c("Low", "High"))) %>% 
+    ggplot(aes(x = value, y = n)) +
+    geom_col(fill = colors[color_nr]) +
+    labs(title = "Predicted Values for COMPAS Score",
+         subtitle = paste0("Absolute Frequency of Predicted Score Values for ", plot_text),
+         x = "COMPAS Score",
+         y = "Predicted Frequency") +
+    ylim(c(0,plot_ylim))
+  
+  ## Plots for comparison of model predictions and base model predictions
+  plot_comp_logit = NULL
+  plot_comp_bin = NULL
+  
+  # Plot for comparison of predicted logits in model and base model
+  if(!is.null(plot_org_logit)){
+    plot_comp_logit = plot_org_logit +
+      geom_histogram(data = counter_pred_logit %>% as_tibble() %>% rename(logit = value) ,
+                 aes(x = logit, y = after_stat(density)), 
+                 bins = 30, 
+                 fill = colors[color_nr],
+                 alpha = 0.3) +
+      geom_density(data = counter_pred_logit %>% as_tibble() %>% rename(logit = value), 
+                   aes(x = logit),
+                   size = 1,
+                   color = colors[color_nr]) +
+      labs(title = "Comparison of Predicted Values for Probabilites of a High COMPAS Score",
+           subtitle = paste0("Histogram and Density Function for Original Data & ", plot_text),
+           x = "Predicted Probability of a High COMPAS Score",
+           y = "Density") 
+  }
+  
+  # Plot for comparison of predicted COMPAS scores in model and base model
+  if(!is.null(plot_org_bin)){
+    
+    counter_pred_plot = counter_pred %>% 
+      as_tibble() %>% 
+      group_by(value) %>% 
+      summarise(n = n()) %>% 
+      mutate(value = factor(value, levels = c(0,1), labels = c("Low", "High")),
+             Data = factor(plot_text_bin))
+    
+    plot_comp_bin = plot_org_bin$data %>% 
+      mutate(Data = factor("Original")) %>% 
+      rbind(counter_pred_plot) %>% 
+      group_by(Data) %>% 
+      ggplot(aes(x = value, y = n, fill = Data)) +
+      geom_col(position = position_dodge(0.82), width = 0.8) +
+      labs(title = "Comparison of Predicted Values for COMPAS Score",
+           subtitle = paste0("Frequency of Predicted Score Values for Original Data & ", plot_text),
+           x = "COMPAS Score",
+           y = "Predicted Frequency") +
+      scale_fill_manual(values = c(colors[2], colors[color_nr]))
+  }
+  
+  # Output list
+  output = list(counter_pred_logit = counter_pred_logit,
+                counter_pred = counter_pred,
+                accuracy = accuracy,
+                plot_compas_weights = plot_compas_weights,
+                plot_compas_weights_age = plot_compas_weights_age,
+                weight_table = weight_table,
+                plot_counter_logit = plot_counter_logit,
+                plot_counter_bin = plot_counter_bin,
+                plot_comp_logit = plot_comp_logit,
+                plot_comp_bin = plot_comp_bin
+                )
+  
+  return(output)
+}
 ```
- 
+
+Define global seed
 ```{r}
-ggsave("04_plot_counter_pred_logit_base.png",
-       plot = plot_counter_pred_logit_base,
-       device = "png",
-       path = here("03_outputs", "04_counterfactual"),
-       dpi = 300,
-       width = 25,
-       height = 15,
-       units = c("cm")
-       )
-
-ggsave("05_plot_counter_pred_base.png",
-       plot = plot_counter_pred_base,
-       device = "png",
-       path = here("03_outputs", "04_counterfactual"),
-       dpi = 300,
-       width = 25,
-       height = 15,
-       units = c("cm")
-       )
+global_seed = 98324757
 ```
 
-## Counterfactual Analysis
 
+# Base model with estiamted U_d and U_j
 ```{r}
+data_base = data_counter
 
+model_base = model_counter(data = data_base,
+                           u_d = u_d, 
+                           u_j = u_j, 
+                           iter = 200, 
+                           chains = 1, 
+                           seed = global_seed)
+
+pred_base = prediction_counter(params_df = model_base$params, # klappt das??? 
+                               data = data_base, 
+                               color_nr = 2, 
+                               plot_text = "Original Data", 
+                               plot_text_bin = "Original", 
+                               plot_org_logit = NULL, 
+                               plot_org_bin = NULL)
 ```
 
+# Intervention on Sex: all cases are now male
+```{r}
+data_sexm = data_counter %>% 
+  mutate(Sex_Male = 1, 
+         Sex_Female = 0)
+
+model_sexm = model_counter(data = data_sexm,
+                           u_d = u_d, 
+                           u_j = u_j, 
+                           iter = 200, 
+                           chains = 1, 
+                           seed = global_seed)
+
+pred_sexm = prediction_counter(params_df = model_sexm$params, # klappt das??? 
+                               data = data_sexm, 
+                               color_nr = 3, 
+                               plot_text = "Intervention Sex -> m", 
+                               plot_text_bin = "Sex=m", 
+                               plot_org_logit = pred_base$plot_counter_logit, 
+                               plot_org_bin = pred_base$plot_counter_bin)
+```
