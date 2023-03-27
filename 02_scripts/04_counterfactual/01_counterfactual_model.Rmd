@@ -1,5 +1,5 @@
 ---
-title: "Counterfactual Fairness"
+title: "Counterfactual Fairness Model"
 author: "Simon Schrauth"
 date: "`r Sys.Date()`"
 output: html_document
@@ -177,9 +177,9 @@ data_base_list = list(N = n,
 fit_base = stan(file = here("02_scripts", "04_counterfactual",
                             "02_counterfactual_model_base.stan"), 
                 data = data_base_list, 
-                iter = 200, # mind. 2000!!!
+                iter = 2000, 
                 chains = 4,
-                seed = 1216334198,
+                seed = 219684725,
                 verbose = TRUE)
 
 params_base = extract(fit_base)
@@ -188,30 +188,30 @@ params_base = extract(fit_base)
 # Save base model
 ```{r}
 saveRDS(fit_base, 
-        file = here("01_data", "02_data_processed", "04_counterfactual",
+        file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
                     "01_model_base_fit.rds")
         )
 
 saveRDS(params_base, 
-        file = here("01_data", "02_data_processed", "04_counterfactual",
+        file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
                     "02_model_base_params.rds")
         )
 
-fit_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual",
+fit_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
                                "01_model_base_fit.rds")
         )
 
-params_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual",
+params_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
                                   "02_model_base_params.rds")
         )
 ```
 
 ```{r}
-# U_d parameter überprüfen
+# have a look at sampled U_d parameter distributions
 
-s = sample(seq(1,5553), 50)
+s = sample(seq(1,5553), 10)
 
-pc = as.data.frame(params_counter)[,s] %>% 
+pc = as.data.frame(params_base)[,s] %>% 
   pivot_longer(cols = everything())
 
 pc %>% 
@@ -229,7 +229,7 @@ pc %>%
 
 # Compute median and median absolute deviaten (mad) of U_d and U_j distributions for all cases
 ```{r}
-u_d = params_counter %>% 
+u_d = params_base %>% 
   as.data.frame() %>% 
   select(starts_with(c("u_d"))) %>% 
   summarise(across(.cols = everything(),
@@ -242,7 +242,7 @@ u_d = params_counter %>%
   pivot_wider(names_from = "metric",
               values_from = "value")
 
-u_j = params_counter %>% 
+u_j = params_base %>% 
   as.data.frame() %>% 
   select(starts_with(c("u_j"))) %>% 
   summarise(across(.cols = everything(),
@@ -259,20 +259,20 @@ u_j = params_counter %>%
 ```{r}
 saveRDS(u_d, 
         file = here("01_data", "02_data_processed", "04_counterfactual",
-                    "03_ud.rds")
+                    "01_ud.rds")
         )
 
 saveRDS(u_j, 
         file = here("01_data", "02_data_processed", "04_counterfactual",
-                    "04_uj.rds")
+                    "02_uj.rds")
         )
 
 u_d = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual",
-                          "03_ud.rds")
+                          "01_ud.rds")
         )
 
 u_j = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual",
-                          "04_uj.rds")
+                          "02_uj.rds")
         )
 ```
 
@@ -526,7 +526,6 @@ prediction_counter = function(params_df,
                               color_nr,
                               plot_text,
                               plot_text_bin,
-                              plot_ylim = 3500,
                               plot_org_logit = NULL,
                               plot_org_bin = NULL){
   
@@ -583,8 +582,7 @@ prediction_counter = function(params_df,
     labs(title = "Predicted Values for COMPAS Score",
          subtitle = paste0("Absolute Frequency of Predicted Score Values for ", plot_text),
          x = "COMPAS Score",
-         y = "Predicted Frequency") +
-    ylim(c(0,plot_ylim))
+         y = "Predicted Frequency") 
   
   ## Plots for comparison of model predictions and base model predictions
   plot_comp_logit = NULL
@@ -600,10 +598,10 @@ prediction_counter = function(params_df,
                  alpha = 0.3) +
       geom_density(data = counter_pred_logit %>% as_tibble() %>% rename(logit = value), 
                    aes(x = logit),
-                   size = 1,
+                   linewidth = 1,
                    color = colors[color_nr]) +
       labs(title = "Comparison of Predicted Values for Probabilites of a High COMPAS Score",
-           subtitle = paste0("Histogram and Density Function for Original Data & ", plot_text),
+           subtitle = paste0("Histogram and Density Function for Original Data & Intervention Data"),
            x = "Predicted Probability of a High COMPAS Score",
            y = "Density") 
   }
@@ -618,17 +616,31 @@ prediction_counter = function(params_df,
       mutate(value = factor(value, levels = c(0,1), labels = c("Low", "High")),
              Data = factor(plot_text_bin))
     
-    plot_comp_bin = plot_org_bin$data %>% 
-      mutate(Data = factor("Original")) %>% 
-      rbind(counter_pred_plot) %>% 
-      group_by(Data) %>% 
-      ggplot(aes(x = value, y = n, fill = Data)) +
-      geom_col(position = position_dodge(0.82), width = 0.8) +
-      labs(title = "Comparison of Predicted Values for COMPAS Score",
-           subtitle = paste0("Frequency of Predicted Score Values for Original Data & ", plot_text),
-           x = "COMPAS Score",
-           y = "Predicted Frequency") +
-      scale_fill_manual(values = c(colors[2], colors[color_nr]))
+    if(ncol(plot_org_bin$data) == 2){
+       plot_comp_bin = plot_org_bin$data %>% 
+        mutate(Data = factor("Original")) %>% 
+        rbind(counter_pred_plot) %>% 
+        group_by(Data) %>% 
+        ggplot(aes(x = value, y = n, fill = Data)) +
+        geom_col(position = position_dodge(0.82), width = 0.8) +
+        labs(title = "Comparison of Predicted Values for COMPAS Score",
+             subtitle = paste0("Frequency of Predicted Score Values for Original Data & ", plot_text),
+             x = "COMPAS Score",
+             y = "Predicted Frequency") +
+        scale_fill_manual(values = c(colors[2], colors[color_nr]))
+    } else {
+      plot_comp_bin = plot_org_bin$data %>% 
+        rbind(counter_pred_plot) %>% 
+        group_by(Data) %>% 
+        ggplot(aes(x = value, y = n, fill = Data)) +
+        geom_col(position = position_dodge(0.82), width = 0.8) +
+        labs(title = "Comparison of Predicted Values for COMPAS Score",
+             subtitle = paste0("Frequency of Predicted Score Values for Original Data & Intervention Data"),
+             x = "COMPAS Score",
+             y = "Predicted Frequency") +
+        scale_fill_manual(values = c(as.vector(unique(ggplot_build(plot_org_bin)$data[[1]]["fill"])[["fill"]]),
+                                     colors[color_nr]))
+    }
   }
   
   # Output list
@@ -661,17 +673,37 @@ data_base = data_counter
 model_base = model_counter(data = data_base,
                            u_d = u_d, 
                            u_j = u_j, 
-                           iter = 200, 
-                           chains = 1, 
+                           iter = 2000, 
+                           chains = 4, 
                            seed = global_seed)
 
-pred_base = prediction_counter(params_df = model_base$params, # klappt das??? 
+pred_base = prediction_counter(params_df = model_base$params,  
                                data = data_base, 
                                color_nr = 2, 
                                plot_text = "Original Data", 
                                plot_text_bin = "Original", 
                                plot_org_logit = NULL, 
                                plot_org_bin = NULL)
+```
+
+```{r}
+saveRDS(model_base, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                    "03_model_base.rds")
+        )
+
+saveRDS(pred_base, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                    "04_pred_base.rds")
+        )
+
+model_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                                 "03_model_base.rds")
+                    )
+
+pred_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                                "04_pred_base.rds")
+                   )
 ```
 
 # Intervention on Sex: all cases are now male
@@ -683,15 +715,405 @@ data_sexm = data_counter %>%
 model_sexm = model_counter(data = data_sexm,
                            u_d = u_d, 
                            u_j = u_j, 
-                           iter = 200, 
-                           chains = 1, 
+                           iter = 200, # mind. 2000!!!
+                           chains = 1, # 4!!!
                            seed = global_seed)
 
-pred_sexm = prediction_counter(params_df = model_sexm$params, # klappt das??? 
+pred_sexm = prediction_counter(params_df = model_sexm$params, 
                                data = data_sexm, 
                                color_nr = 3, 
-                               plot_text = "Intervention Sex -> m", 
-                               plot_text_bin = "Sex=m", 
+                               plot_text = "Intervention Sex -> Male", 
+                               plot_text_bin = "Male", 
                                plot_org_logit = pred_base$plot_counter_logit, 
                                plot_org_bin = pred_base$plot_counter_bin)
+```
+
+```{r}
+saveRDS(model_sexm, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                    "05_model_sexm.rds")
+        )
+
+saveRDS(pred_sexm, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                    "06_pred_sexm.rds")
+        )
+
+model_sexm = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                                 "05_model_sexm.rds")
+                    )
+
+pred_sexm = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                                "06_pred_sexm.rds")
+                   )
+```
+
+# Intervention on Sex: all cases are now female
+```{r}
+data_sexf = data_counter %>% 
+  mutate(Sex_Male = 0, 
+         Sex_Female = 1)
+
+model_sexf = model_counter(data = data_sexf,
+                           u_d = u_d, 
+                           u_j = u_j, 
+                           iter = 200, # mind. 2000!!!
+                           chains = 1, # 4!!!
+                           seed = global_seed)
+
+pred_sexf = prediction_counter(params_df = model_sexf$params, 
+                               data = data_sexf, 
+                               color_nr = 1, 
+                               plot_text = "Intervention Sex -> Female", 
+                               plot_text_bin = "Female", 
+                               plot_org_logit = pred_sexm$plot_comp_logit, 
+                               plot_org_bin = pred_sexm$plot_comp_bin)
+
+
+bin_colors = unique(ggplot_build(pred_sexf$plot_comp_bin)$data[[1]]["fill"])
+
+sex_comp_logit = pred_sexf$plot_comp_logit +
+                    geom_label(x = 0.58, y = 2, label = "Original", color = bin_colors[1,1]) +
+                    geom_label(x = 0.08, y = 1.4, label = "Male", color = bin_colors[2,1]) +
+                    geom_label(x = 0.88, y = 1.25, label = "Female", color = bin_colors[3,1]) 
+
+sex_comp_logit
+pred_sexf$plot_comp_bin
+```
+
+```{r}
+saveRDS(model_sexf, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                    "07_model_sexf.rds")
+        )
+
+saveRDS(pred_sexf, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                    "08_pred_sexf.rds")
+        )
+
+model_sexf = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                                 "07_model_sexf.rds")
+                    )
+
+pred_sexf = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                                "08_pred_sexf.rds")
+                   )
+```
+
+
+# Intervention on Race: all cases are now white
+```{r}
+data_racewhite = data_counter %>% 
+  mutate(across(.cols = starts_with("Race"),
+                .fns = ~ 0)) %>% 
+  mutate(Race_Caucasian = 1) 
+
+
+model_racewhite = model_counter(data = data_racewhite,
+                                u_d = u_d, 
+                                u_j = u_j, 
+                                iter = 200, # mind. 2000!!!
+                                chains = 1, # 4!!!
+                                seed = global_seed)
+
+pred_racewhite = prediction_counter(params_df = model_racewhite$params, 
+                                    data = data_racewhite, 
+                                    color_nr = 3, 
+                                    plot_text = "Intervention Race -> White", 
+                                    plot_text_bin = "White", 
+                                    plot_org_logit = pred_base$plot_counter_logit, 
+                                    plot_org_bin = pred_base$plot_counter_bin)
+```
+
+```{r}
+saveRDS(model_racewhite, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                    "09_model_racewhite.rds")
+        )
+
+saveRDS(pred_racewhite, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                    "10_pred_racewhite.rds")
+        )
+
+model_racewhite = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                                 "09_model_racewhite.rds")
+                    )
+
+pred_racewhite = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                                "10_pred_racewhite.rds")
+                   )
+```
+
+
+# Intervention on Race: all cases are now black
+```{r}
+data_raceblack = data_counter %>% 
+  mutate(across(.cols = starts_with("Race"),
+                .fns = ~ 0)) %>% 
+  mutate(Race_African_American = 1) 
+
+
+model_raceblack = model_counter(data = data_raceblack,
+                                u_d = u_d, 
+                                u_j = u_j, 
+                                iter = 200, # mind. 2000!!!
+                                chains = 1, # 4!!!
+                                seed = global_seed)
+
+pred_raceblack = prediction_counter(params_df = model_raceblack$params, 
+                                    data = data_raceblack, 
+                                    color_nr = 1, 
+                                    plot_text = "Intervention Race -> Black", 
+                                    plot_text_bin = "Black", 
+                                    plot_org_logit = pred_racewhite$plot_comp_logit, 
+                                    plot_org_bin = pred_racewhite$plot_comp_bin)
+
+bin_colors = unique(ggplot_build(pred_raceblack$plot_comp_bin)$data[[1]]["fill"])
+
+race_wb_comp_logit = pred_raceblack$plot_comp_logit +
+                        geom_label(x = 0.1, y = 1.3, label = "Original", color = bin_colors[1,1]) +
+                        geom_label(x = 0.8, y = 1.8, label = "White", color = bin_colors[2,1]) +
+                        geom_label(x = 1, y = 1.3, label = "Black", color = bin_colors[3,1]) 
+
+race_wb_comp_logit
+pred_raceblack$plot_comp_bin
+```
+
+```{r}
+saveRDS(model_raceblack, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                    "11_model_raceblack.rds")
+        )
+
+saveRDS(pred_raceblack, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                    "12_pred_raceblack.rds")
+        )
+
+model_raceblack = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                                 "11_model_raceblack.rds")
+                    )
+
+pred_raceblack = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                                "12_pred_raceblack.rds")
+                   )
+```
+
+
+# Intervention on Race: all cases are now asian
+```{r}
+data_raceasian = data_counter %>% 
+  mutate(across(.cols = starts_with("Race"),
+                .fns = ~ 0)) %>% 
+  mutate(Race_Asian = 1) 
+
+
+model_raceasian = model_counter(data = data_raceasian,
+                                u_d = u_d, 
+                                u_j = u_j, 
+                                iter = 200, # mind. 2000!!!
+                                chains = 1, # 4!!!
+                                seed = global_seed)
+
+pred_raceasian = prediction_counter(params_df = model_raceasian$params, 
+                                    data = data_raceasian, 
+                                    color_nr = 1, 
+                                    plot_text = "Intervention Race -> Asian", 
+                                    plot_text_bin = "Asian", 
+                                    plot_org_logit = pred_racewhite$plot_comp_logit, 
+                                    plot_org_bin = pred_racewhite$plot_comp_bin)
+
+bin_colors = unique(ggplot_build(pred_raceasian$plot_comp_bin)$data[[1]]["fill"])
+
+race_wa_comp_logit = pred_raceasian$plot_comp_logit +
+                        geom_label(x = 0.58, y = 2, label = "Original", color = bin_colors[1,1]) +
+                        geom_label(x = 0.08, y = 1.4, label = "White", color = bin_colors[2,1]) +
+                        geom_label(x = 0.88, y = 1.25, label = "Asian", color = bin_colors[3,1]) 
+
+race_wa_comp_logit
+pred_raceasian$plot_comp_bin
+```
+
+```{r}
+saveRDS(model_raceasian, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                    "13_model_raceasian.rds")
+        )
+
+saveRDS(pred_raceasian, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                    "14_pred_raceasian.rds")
+        )
+
+model_raceasian = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                                 "13_model_raceasian.rds")
+                    )
+
+pred_raceasian = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                                "14_raceasian.rds")
+                   )
+```
+
+# Intervention on Race: all cases are now hispanic
+```{r}
+data_racehisp = data_counter %>% 
+  mutate(across(.cols = starts_with("Race"),
+                .fns = ~ 0)) %>% 
+  mutate(Race_Hispanic = 1) 
+
+
+model_racehisp = model_counter(data = data_racehisp,
+                               u_d = u_d, 
+                               u_j = u_j, 
+                               iter = 200, # mind. 2000!!!
+                               chains = 1, # 4!!!
+                               seed = global_seed)
+
+pred_racehisp = prediction_counter(params_df = model_racehisp$params, 
+                                   data = data_racehisp, 
+                                   color_nr = 1, 
+                                   plot_text = "Intervention Race -> Hispanic", 
+                                   plot_text_bin = "Hispanic", 
+                                   plot_org_logit = pred_racewhite$plot_comp_logit, 
+                                   plot_org_bin = pred_racewhite$plot_comp_bin)
+
+bin_colors = unique(ggplot_build(pred_racehisp$plot_comp_bin)$data[[1]]["fill"])
+
+race_wh_comp_logit = pred_racehisp$plot_comp_logit +
+                        geom_label(x = 0.58, y = 2, label = "Original", color = bin_colors[1,1]) +
+                        geom_label(x = 0.08, y = 1.4, label = "White", color = bin_colors[2,1]) +
+                        geom_label(x = 0.88, y = 1.25, label = "Hispanic", color = bin_colors[3,1]) 
+
+race_wh_comp_logit
+pred_racehisp$plot_comp_bin
+```
+
+```{r}
+saveRDS(model_racehisp, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                    "15_model_racehisp.rds")
+        )
+
+saveRDS(pred_racehisp, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                    "16_pred_racehisp.rds")
+        )
+
+model_racehisp = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                                 "15_model_racehisp.rds")
+                    )
+
+pred_racehisp = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                                "16_racehisp.rds")
+                   )
+```
+
+# Intervention on Race: all cases are now natives
+```{r}
+data_racenative = data_counter %>% 
+  mutate(across(.cols = starts_with("Race"),
+                .fns = ~ 0)) %>% 
+  mutate(Race_Native_American = 1) 
+
+
+model_racenative = model_counter(data = data_racenative,
+                                 u_d = u_d, 
+                                 u_j = u_j, 
+                                 iter = 200, # mind. 2000!!!
+                                 chains = 1, # 4!!!
+                                 seed = global_seed)
+
+pred_racenative = prediction_counter(params_df = model_racenative$params, 
+                                     data = data_racenative, 
+                                     color_nr = 1, 
+                                     plot_text = "Intervention Race -> Native", 
+                                     plot_text_bin = "Native", 
+                                     plot_org_logit = pred_racewhite$plot_comp_logit, 
+                                     plot_org_bin = pred_racewhite$plot_comp_bin)
+
+bin_colors = unique(ggplot_build(pred_racenative$plot_comp_bin)$data[[1]]["fill"])
+
+race_wn_comp_logit = pred_racenative$plot_comp_logit +
+                        geom_label(x = 0.58, y = 2, label = "Original", color = bin_colors[1,1]) +
+                        geom_label(x = 0.08, y = 1.4, label = "White", color = bin_colors[2,1]) +
+                        geom_label(x = 0.88, y = 1.25, label = "Native", color = bin_colors[3,1]) 
+
+race_wn_comp_logit
+pred_racenative$plot_comp_bin
+```
+
+```{r}
+saveRDS(model_racenative, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                    "17_model_racenative.rds")
+        )
+
+saveRDS(pred_racenative, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                    "18_pred_racenative.rds")
+        )
+
+model_racenative = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                                 "17_model_racenative.rds")
+                    )
+
+pred_racenative = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                                "18_racenative.rds")
+                   )
+```
+
+# Intervention on Race: all cases are now other races
+```{r}
+data_raceother = data_counter %>% 
+  mutate(across(.cols = starts_with("Race"),
+                .fns = ~ 0)) %>% 
+  mutate(Race_Other = 1) 
+
+
+model_raceother = model_counter(data = data_raceother,
+                                u_d = u_d, 
+                                u_j = u_j, 
+                                iter = 200, # mind. 2000!!!
+                                chains = 1, # 4!!!
+                                seed = global_seed)
+
+pred_raceother = prediction_counter(params_df = model_raceother$params, 
+                                    data = data_raceother, 
+                                    color_nr = 1, 
+                                    plot_text = "Intervention Race -> Other", 
+                                    plot_text_bin = "Other", 
+                                    plot_org_logit = pred_racewhite$plot_comp_logit, 
+                                    plot_org_bin = pred_racewhite$plot_comp_bin)
+
+bin_colors = unique(ggplot_build(pred_raceother$plot_comp_bin)$data[[1]]["fill"])
+
+race_wo_comp_logit = pred_raceother$plot_comp_logit +
+                        geom_label(x = 0.58, y = 2, label = "Original", color = bin_colors[1,1]) +
+                        geom_label(x = 0.08, y = 1.4, label = "White", color = bin_colors[2,1]) +
+                        geom_label(x = 0.88, y = 1.25, label = "Other", color = bin_colors[3,1]) 
+
+race_wo_comp_logit
+pred_raceother$plot_comp_bin
+```
+
+```{r}
+saveRDS(model_raceother, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                    "19_model_raceother.rds")
+        )
+
+saveRDS(pred_raceother, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                    "20_pred_raceother.rds")
+        )
+
+model_raceother = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                                 "19_model_raceother.rds")
+                    )
+
+pred_raceother = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
+                                "20_raceother.rds")
+                   )
 ```

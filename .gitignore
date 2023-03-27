@@ -39,6 +39,4 @@ vignettes/*.pdf
 .Renviron
 
 # specific files
-*_model_counter_fit.rds
-*_model_counter_params.rds
-*_ext_counter_pred_bases.rds
+big_data/
