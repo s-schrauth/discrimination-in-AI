@@ -688,7 +688,7 @@ model_base = model_counter(data = data_base,
                            u_j = u_j, 
                            iter = 2000, 
                            chains = 4, 
-                           seed = 2394575)
+                           seed = 2394875)
 
 pred_base = prediction_counter(params_df = model_base$params,  
                                data = data_base, 
@@ -718,7 +718,6 @@ model_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfact
 pred_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual",
                                 "04_pred_base.rds")
                    )
-
 ```
 
 #### Interventions
@@ -834,9 +833,9 @@ data_racewhite = data_counter %>%
 model_racewhite = model_counter(data = data_racewhite,
                                 u_d = u_d, 
                                 u_j = u_j, 
-                                iter = 200, # mind. 2000!!!
-                                chains = 1, # 4!!!
-                                seed = global_seed)
+                                iter = 2000,
+                                chains = 4, 
+                                seed = 98324757)
 
 pred_racewhite = prediction_counter(params_df = model_racewhite$params, 
                                     data = data_racewhite, 
@@ -942,6 +941,7 @@ model_raceasian = model_counter(data = data_raceasian,
 
 pred_raceasian = prediction_counter(params_df = model_raceasian$params, 
                                     data = data_raceasian, 
+                                    seed = 39485727,
                                     color_nr = 1, 
                                     plot_text = "Intervention Race -> Asian", 
                                     plot_text_bin = "Asian", 
@@ -991,12 +991,13 @@ data_racehisp = data_counter %>%
 model_racehisp = model_counter(data = data_racehisp,
                                u_d = u_d, 
                                u_j = u_j, 
-                               iter = 200, # mind. 2000!!!
-                               chains = 1, # 4!!!
-                               seed = global_seed)
+                               iter = 2000, 
+                               chains = 4,
+                               seed = 23498573)
 
 pred_racehisp = prediction_counter(params_df = model_racehisp$params, 
                                    data = data_racehisp, 
+                                   seed = 28975065,
                                    color_nr = 1, 
                                    plot_text = "Intervention Race -> Hispanic", 
                                    plot_text_bin = "Hispanic", 
@@ -1052,7 +1053,7 @@ model_racenative = model_counter(data = data_racenative,
 
 pred_racenative = prediction_counter(params_df = model_racenative$params, 
                                      data = data_racenative,
-                                     seed = 438978923,
+                                     seed = 43897923,
                                      color_nr = 1, 
                                      plot_text = "Intervention Race -> Native", 
                                      plot_text_bin = "Native", 
@@ -1102,12 +1103,13 @@ data_raceother = data_counter %>%
 model_raceother = model_counter(data = data_raceother,
                                 u_d = u_d, 
                                 u_j = u_j, 
-                                iter = 200, # mind. 2000!!!
-                                chains = 1, # 4!!!
-                                seed = global_seed)
+                                iter = 2000, 
+                                chains = 4, 
+                                seed = 94858385)
 
 pred_raceother = prediction_counter(params_df = model_raceother$params, 
-                                    data = data_raceother, 
+                                    data = data_raceother,
+                                    seed = 455927483,
                                     color_nr = 1, 
                                     plot_text = "Intervention Race -> Other", 
                                     plot_text_bin = "Other", 
