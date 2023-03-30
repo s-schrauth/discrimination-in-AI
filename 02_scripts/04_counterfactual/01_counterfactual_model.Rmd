@@ -478,15 +478,21 @@ Functions for Prediction & Plotting (adapted code from [https://medium.com/\@ale
 
 ```{r}
 # Function for prediction of logit values of given data frame
-prediction_counter_logit = function(data, params_df, fun){
+prediction_counter_logit = function(data, params_df, fun, seed){
+  
+  set.seed((seed))
   
   # Only U_d, U_j and compas weights are relevant
   params_df_new = params_df %>% 
     select(starts_with(c("u_", "compas_")))
   
   # Sample a parameter set for each observation
-  params_ind = sample(seq(1, nrow(params_df_new)), size = nrow(data), replace = TRUE) 
-  params = params_df[params_ind,]
+  params = data.frame(matrix(NA, nrow = nrow(data), ncol = ncol(params_df_new)))
+  colnames(params) = colnames(params_df_new)
+  
+  for (i in 1:ncol(params)) {
+    params[,i] = sample(params_df_new[,i], size = nrow(params), replace = TRUE)
+  }
   
   # Define certain parameter and variable data frames
   param_prot = params %>% 
@@ -524,7 +530,9 @@ prediction_counter_logit = function(data, params_df, fun){
   
   return(inv_logit)
 }
+```
 
+```{r}
 # Function for prediction dataframes and prediction plots (incl. weights) 
 prediction_counter = function(params_df, 
                               data, 
@@ -539,10 +547,10 @@ prediction_counter = function(params_df,
                               plot_org_bin = NULL){
   
   # Calculate predicted values for logits and COMPAS score
-  set.seed(seed)
   counter_pred_logit = prediction_counter_logit(params_df = params_df %>% as.data.frame(),
                                                 data = data,
-                                                fun = "median")
+                                                fun = "median",
+                                                seed = seed)
   
   counter_pred = ifelse(counter_pred_logit >= threshold, 1, 0)
   
@@ -669,11 +677,6 @@ prediction_counter = function(params_df,
 }
 ```
 
-Define global seed
-
-```{r}
-global_seed = 98324757
-```
 
 #### Base model with estiamted U_d and U_j
 
@@ -685,10 +688,11 @@ model_base = model_counter(data = data_base,
                            u_j = u_j, 
                            iter = 2000, 
                            chains = 4, 
-                           seed = global_seed)
+                           seed = 2394575)
 
 pred_base = prediction_counter(params_df = model_base$params,  
                                data = data_base, 
+                               seed = 32458973,
                                color_nr = 2, 
                                plot_text = "Original Data", 
                                plot_text_bin = "Original", 
@@ -714,6 +718,7 @@ model_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfact
 pred_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual",
                                 "04_pred_base.rds")
                    )
+
 ```
 
 #### Interventions
@@ -730,10 +735,11 @@ model_sexm = model_counter(data = data_sexm,
                            u_j = u_j, 
                            iter = 2000, 
                            chains = 4, 
-                           seed = global_seed)
+                           seed = 98324757)
 
 pred_sexm = prediction_counter(params_df = model_sexm$params, 
                                data = data_sexm, 
+                               seed = 1893475893,
                                color_nr = 3, 
                                plot_text = "Intervention Sex -> Male", 
                                plot_text_bin = "Male", 
@@ -773,10 +779,11 @@ model_sexf = model_counter(data = data_sexf,
                            u_j = u_j, 
                            iter = 2000, 
                            chains = 4, 
-                           seed = global_seed)
+                           seed = 234578481)
 
 pred_sexf = prediction_counter(params_df = model_sexf$params, 
                                data = data_sexf, 
+                               seed = 3588495,
                                color_nr = 1, 
                                plot_text = "Intervention Sex -> Female", 
                                plot_text_bin = "Female", 
@@ -834,6 +841,7 @@ model_racewhite = model_counter(data = data_racewhite,
 pred_racewhite = prediction_counter(params_df = model_racewhite$params, 
                                     data = data_racewhite, 
                                     color_nr = 3, 
+                                    seed = 49586783,
                                     plot_text = "Intervention Race -> White", 
                                     plot_text_bin = "White", 
                                     plot_org_logit = pred_base$plot_counter_logit, 
@@ -872,12 +880,13 @@ data_raceblack = data_counter %>%
 model_raceblack = model_counter(data = data_raceblack,
                                 u_d = u_d, 
                                 u_j = u_j, 
-                                iter = 200, # mind. 2000!!!
-                                chains = 1, # 4!!!
-                                seed = global_seed)
+                                iter = 2000, 
+                                chains = 4, 
+                                seed = 138971459)
 
 pred_raceblack = prediction_counter(params_df = model_raceblack$params, 
                                     data = data_raceblack, 
+                                    seed = 34897453,
                                     color_nr = 1, 
                                     plot_text = "Intervention Race -> Black", 
                                     plot_text_bin = "Black", 
@@ -927,9 +936,9 @@ data_raceasian = data_counter %>%
 model_raceasian = model_counter(data = data_raceasian,
                                 u_d = u_d, 
                                 u_j = u_j, 
-                                iter = 200, # mind. 2000!!!
-                                chains = 1, # 4!!!
-                                seed = global_seed)
+                                iter = 2000,
+                                chains = 4,
+                                seed = 2468973)
 
 pred_raceasian = prediction_counter(params_df = model_raceasian$params, 
                                     data = data_raceasian, 
@@ -966,7 +975,7 @@ model_raceasian = readRDS(file = here("01_data", "02_data_processed", "04_counte
                     )
 
 pred_raceasian = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
-                                "14_raceasian.rds")
+                                "14_pred_raceasian.rds")
                    )
 ```
 
@@ -1021,7 +1030,7 @@ model_racehisp = readRDS(file = here("01_data", "02_data_processed", "04_counter
                     )
 
 pred_racehisp = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual",
-                                "16_racehisp.rds")
+                                "16_pred_racehisp.rds")
                    )
 ```
 
@@ -1037,12 +1046,13 @@ data_racenative = data_counter %>%
 model_racenative = model_counter(data = data_racenative,
                                  u_d = u_d, 
                                  u_j = u_j, 
-                                 iter = 200, # mind. 2000!!!
-                                 chains = 1, # 4!!!
-                                 seed = global_seed)
+                                 iter = 2000, 
+                                 chains = 4, 
+                                 seed = 3428927)
 
 pred_racenative = prediction_counter(params_df = model_racenative$params, 
-                                     data = data_racenative, 
+                                     data = data_racenative,
+                                     seed = 438978923,
                                      color_nr = 1, 
                                      plot_text = "Intervention Race -> Native", 
                                      plot_text_bin = "Native", 
@@ -1076,7 +1086,7 @@ model_racenative = readRDS(file = here("01_data", "02_data_processed", "04_count
                     )
 
 pred_racenative = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
-                                "18_racenative.rds")
+                                "18_pred_racenative.rds")
                    )
 ```
 
@@ -1131,7 +1141,7 @@ model_raceother = readRDS(file = here("01_data", "02_data_processed", "04_counte
                     )
 
 pred_raceother = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
-                                "20_raceother.rds")
+                                "20_pred_raceother.rds")
                    )
 ```
 
@@ -1158,12 +1168,6 @@ rejected_function = function(data, privileged){
   
   return(output)
 }
-
-data = list(data1, data2)
-data_logit = list(logit1, logit2)
-
-data_priv = data0
-data_logit_priv = logit0
 
 diff_calc = function(theta,
                      data_priv,
@@ -1444,4 +1448,21 @@ diff_calc(theta = 0.1,
 
 theta_race = NA
 ```
+
+
+
+```{r}
+sexm_eval = data_base %>% 
+  mutate(logit = pred_base$counter_pred_logit,
+         bin = pred_base$counter_pred,
+         logit_sexm = pred_sexm$counter_pred_logit,
+         bin_sexm = pred_sexm$counter_pred) %>% 
+  mutate(logit_diff = logit-logit_sexm,
+         bin_diff = factor(bin-bin_sexm)) 
+
+hist(sexm_eval$logit_diff)
+barplot(table(sexm_eval$bin_diff))
+
+```
+
 
