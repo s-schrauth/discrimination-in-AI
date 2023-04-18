@@ -1,0 +1,144 @@
+---
+title: "Individual Fairness Model"
+author: "Simon Schrauth"
+date: "`r Sys.Date()`"
+output: html_document
+---
+# Individual
+
+## Goal
+
+After executing this script, the individual fairness/discrimination of the base model should be determined.
+
+## Preparation
+### Install packages
+```{r}
+pacman::p_load(tidyverse, 
+               here,
+               tidymodels,
+               cluster,
+               scales)
+
+tidymodels_prefer()
+```
+
+### Load data
+```{r}
+data_train = readRDS(here("01_data", "02_data_processed", "01_base_model",
+                          "04_data_train.rds"))
+
+model_fit = readRDS(file = here("01_data", "02_data_processed", "01_base_model",
+                                "06_model_fit.rds"))
+```
+
+## Model Calculation
+### Function for pair-wise distance calculations and comparison of instance & probability distances
+```{r}
+diff_dist = function(base_prob, data_train, metric = "statistic"){
+  
+  # D(Mx,My) (probability distance)
+  ## define metric function as statistical distance or relative l-infinity metric
+  if(metric == "statistic"){
+    metric_fun = function(x_high, x_low, y_high, y_low){
+      output = (1/2)*sum(abs(x_low-y_low), abs(x_high-y_high))
+      
+      return(output)
+      }
+  } else if (metric == "l_inf"){
+    metric_fun = function(x_high, x_low, y_high, y_low){
+      quot1 = log(max(x_low/y_low, y_low/x_low))
+      quot2 = log(max(x_high/y_high, y_high/x_high))
+      
+      output = max(quot1, quot2)
+      
+      return(output)
+      }
+    } else {
+      return(warning("metric must be set to 'statistic' or 'l_inf'"))
+    }
+  
+  ## define vectors for probabilities of getting a high or low COMPAS score
+  base_prop_high = as.vector(base_prob$high)
+  base_prop_low = as.vector(base_prob$low)
+  
+  ## empty matrix for pair-wise probability distance
+  Ddist = matrix(data = NA,
+                 nrow = nrow(base_prob),
+                 ncol = nrow(base_prob))
+  
+  ## loop over lower triangle matrix of Ddist and calculate pair-wise distances
+  for (i in 1:nrow(base_prob)) {
+    for (j in 1:i) {
+      x_high = base_prop_high[i]
+      x_low = base_prop_low[i]
+      
+      y_high = base_prop_high[j]
+      y_low = base_prop_low[j]
+    
+      Ddist[i,j] = metric_fun(x_high, x_low, y_high, y_low)
+    }
+  }
+  
+  ## normalise distances to a range of 0 to 1 
+  if(metric == "l_inf"){
+    Ddist = rescale(Ddist, to = c(0,1))
+  }
+  
+  
+  # d(x,y) (instance distance)
+  ## calculate pair-wise gower distance
+  ddist = data_train %>% 
+    select(!compas) %>% 
+    daisy(metric = "gower") %>% 
+    as.matrix()
+  
+  ## create lower triangle matrix for compatibility
+  ddist[upper.tri(ddist)] = NA
+  
+  colnames(ddist) = NULL
+  rownames(ddist) = NULL
+  
+  
+  # Difference Ddist & ddist
+  ## count the cases where individual fairness is not given
+  diff_dist = ifelse(Ddist > ddist, 1, 0)
+  
+  ## calculate relative proportion of those cases w.r.t all pair-wise distances
+  n_unfair = sum(diff_dist, na.rm = TRUE)
+  n_complete = (length(diff_dist)/2)-nrow(diff_dist)
+  
+  n_unfair_rel = n_unfair/n_complete
+  n_unfair_rel
+  
+  # Output
+  output = list(Ddist = Ddist, 
+                ddist = ddist, 
+                diff_dist = diff_dist,
+                n_unfair_rel = n_unfair_rel)
+  
+  return(output)
+}
+```
+
+```{r}
+# extract probabilities out of base model
+base_prob = predict(model_fit, 
+                    new_data = data_train, 
+                    type = "prob") %>% 
+  rename(low = .pred_Low,
+         high = .pred_High)
+
+# calculate proportion of cases where individual fairness is not given (D(Mx, My) > d(x,y))
+dist = diff_dist(base_prob = base_prob, 
+                 data_train = data_train, 
+                 metric = "statistic")
+
+dist$n_unfair_rel
+```
+
+
+## Pre-Processing
+```{r}
+
+```
+

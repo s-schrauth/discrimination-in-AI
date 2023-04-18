@@ -744,6 +744,9 @@ pred_sexm = prediction_counter(params_df = model_sexm$params,
                                plot_text_bin = "Male", 
                                plot_org_logit = pred_base$plot_counter_logit, 
                                plot_org_bin = pred_base$plot_counter_bin)
+
+pred_sexf$weight_table
+pred_sexm$weight_table
 ```
 
 ```{r}
@@ -1149,6 +1152,185 @@ pred_raceother = readRDS(file = here("01_data", "02_data_processed", "04_counter
 
 ### Save graphs
 ```{r}
+
+```
+
+
+### Rerun stuff
+```{r}
+# # Data
+# data_base = data_counter
+# 
+# data_sexm = data_counter %>% 
+#   mutate(Sex_Male = 1, 
+#          Sex_Female = 0)
+# 
+# data_sexf = data_counter %>% 
+#   mutate(Sex_Male = 0, 
+#          Sex_Female = 1)
+# 
+# data_racewhite = data_counter %>% 
+#   mutate(across(.cols = starts_with("Race"),
+#                 .fns = ~ 0)) %>% 
+#   mutate(Race_Caucasian = 1) 
+# 
+# data_raceblack = data_counter %>% 
+#   mutate(across(.cols = starts_with("Race"),
+#                 .fns = ~ 0)) %>% 
+#   mutate(Race_African_American = 1) 
+# 
+# data_raceasian = data_counter %>% 
+#   mutate(across(.cols = starts_with("Race"),
+#                 .fns = ~ 0)) %>% 
+#   mutate(Race_Asian = 1) 
+# 
+# data_racehisp = data_counter %>% 
+#   mutate(across(.cols = starts_with("Race"),
+#                 .fns = ~ 0)) %>% 
+#   mutate(Race_Hispanic = 1) 
+# 
+# data_racenative = data_counter %>% 
+#   mutate(across(.cols = starts_with("Race"),
+#                 .fns = ~ 0)) %>% 
+#   mutate(Race_Native_American = 1) 
+# 
+# data_raceother = data_counter %>% 
+#   mutate(across(.cols = starts_with("Race"),
+#                 .fns = ~ 0)) %>% 
+#   mutate(Race_Other = 1) 
+
+
+# Model results
+model_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                                 "03_model_base.rds")
+                    )
+
+pred_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual",
+                                "04_pred_base.rds")
+                   )
+
+model_sexm = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                                 "05_model_sexm.rds")
+                    )
+
+pred_sexm = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                                "06_pred_sexm.rds")
+                   )
+
+model_sexf = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual",
+                                 "07_model_sexf.rds")
+                    )
+
+pred_sexf = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                                "08_pred_sexf.rds")
+                   )
+
+model_racewhite = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                                 "09_model_racewhite.rds")
+                    )
+
+pred_racewhite = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                                "10_pred_racewhite.rds")
+                   )
+
+model_raceblack = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                                 "11_model_raceblack.rds")
+                    )
+
+pred_raceblack = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                                "12_pred_raceblack.rds")
+                   )
+
+model_raceasian = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                                 "13_model_raceasian.rds")
+                    )
+
+pred_raceasian = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                                "14_pred_raceasian.rds")
+                   )
+
+model_racehisp = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                                 "15_model_racehisp.rds")
+                    )
+
+pred_racehisp = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual",
+                                "16_pred_racehisp.rds")
+                   )
+
+model_racenative = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual",
+                                 "17_model_racenative.rds")
+                    )
+
+pred_racenative = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                                "18_pred_racenative.rds")
+                   )
+
+model_raceother = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                                 "19_model_raceother.rds")
+                    )
+
+pred_raceother = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                                "20_pred_raceother.rds")
+                   )
+```
+
+```{r}
+pred_sexf$plot_comp_logit
+pred_sexf$plot_comp_bin
+
+pred_raceblack$plot_comp_logit
+pred_raceblack$plot_comp_bin
+
+pred_raceasian$plot_comp_logit
+pred_raceasian$plot_comp_bin
+
+pred_racehisp$plot_comp_logit
+pred_racehisp$plot_comp_bin
+
+pred_racenative$plot_comp_logit
+pred_racenative$plot_comp_bin
+
+pred_raceother$plot_comp_logit
+pred_raceother$plot_comp_bin
+```
+
+Test: counterfactual model with variable swap
+```{r}
+data_sexswap = data_counter %>% 
+  mutate(Sex_Male = ifelse(Sex_Male == 1, 0, 1),
+         Sex_Female = ifelse(Sex_Female == 1, 0, 1))
+
+model_sexswap = model_counter(data = data_sexswap,
+                              u_d = u_d, 
+                              u_j = u_j, 
+                              iter = 2000, 
+                              chains = 4, 
+                              seed = 832457)
+
+pred_sexswap = prediction_counter(params_df = model_sexswap$params, 
+                                  data = data_sexswap, 
+                                  seed = 89358379,
+                                  color_nr = 3, 
+                                  plot_text = "Intervention Sexswap", 
+                                  plot_text_bin = "Counterfactual", 
+                                  plot_org_logit = pred_base$plot_counter_logit, 
+                                  plot_org_bin = pred_base$plot_counter_bin)
+
+saveRDS(model_sexswap, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", 
+                    "21_model_sexswap.rds")
+        )
+
+saveRDS(pred_sexswap, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", 
+                    "22_pred_sexswap.rds")
+        )
+
+pred_sexswap$plot_comp_logit
+pred_sexswap$plot_comp_bin
+
+pred_sexswap$weight_table
+pred_sexswap$plot_compas_weights
 
 ```
 
