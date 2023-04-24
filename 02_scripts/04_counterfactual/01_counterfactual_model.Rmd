@@ -1325,10 +1325,14 @@ saveRDS(pred_sexswap,
         file = here("01_data", "02_data_processed", "04_counterfactual", 
                     "22_pred_sexswap.rds")
         )
+pred_sexswap = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                    "22_pred_sexswap.rds")
+        )
 
 pred_sexswap$plot_comp_logit
 pred_sexswap$plot_comp_bin
 
+pred_base$weight_table
 pred_sexswap$weight_table
 pred_sexswap$plot_compas_weights
 
@@ -1361,7 +1365,8 @@ diff_calc = function(theta,
                      prot, 
                      priv){
   
-  upper = 0.5 + theta
+  upper = 0
+  .5 + theta
   lower = 0.5 - theta
   
   d_priv = data_priv %>% 

@@ -32,20 +32,16 @@ model_fit = readRDS(file = here("01_data", "02_data_processed", "01_base_model",
 ```
 
 ## Model Calculation
-### Function for pair-wise distance calculations and comparison of instance & probability distances
+### Functions
+Function for pair-wise distance calculations and comparison of instance & probability distances
 ```{r}
-diff_dist = function(base_prob, data_train, metric = "statistic"){
-  
-  # D(Mx,My) (probability distance)
-  ## define metric function as statistical distance or relative l-infinity metric
-  if(metric == "statistic"){
-    metric_fun = function(x_high, x_low, y_high, y_low){
+metric_stat_fun = function(x_high, x_low, y_high, y_low){
       output = (1/2)*sum(abs(x_low-y_low), abs(x_high-y_high))
       
       return(output)
       }
-  } else if (metric == "l_inf"){
-    metric_fun = function(x_high, x_low, y_high, y_low){
+
+metric_linf_fun = function(x_high, x_low, y_high, y_low){
       quot1 = log(max(x_low/y_low, y_low/x_low))
       quot2 = log(max(x_high/y_high, y_high/x_high))
       
@@ -53,6 +49,17 @@ diff_dist = function(base_prob, data_train, metric = "statistic"){
       
       return(output)
       }
+
+diff_dist = function(base_prob, data_train, metric = "statistic"){
+  
+  # D(Mx,My) (probability distance)
+  ## define metric function as statistical distance or relative l-infinity metric
+  if(metric == "statistic"){
+    metric_fun = metric_stat_fun
+    
+  } else if (metric == "l_inf"){
+    metric_fun = metric_linf_fun
+    
     } else {
       return(warning("metric must be set to 'statistic' or 'l_inf'"))
     }
@@ -120,25 +127,265 @@ diff_dist = function(base_prob, data_train, metric = "statistic"){
 }
 ```
 
+Function for logistic regression by hand (with manually coded optimization algorithm analog to glm)
+```{r}
+my_method <- function(x, y, 
+                      family = binomial(link = "logit"), 
+                      control, ...) {
+  # Initialize the beta coefficients to zero
+  beta = rep(0, ncol(x))
+  
+  # Set the maximum number of iterations to 100
+  max_iter = 200
+  
+  # Set the convergence threshold to 1e-6
+  tol = 1e-6
+
+  # Iterate until convergence or maximum number of iterations reached
+  for (iter in 1:max_iter) {
+    # Calculate the predicted probabilities using the current beta coefficients
+    eta = x %*% beta
+    mu = family$linkinv(eta)
+    
+    # Calculate the working response
+    w = mu * (1 - mu)
+    z = eta + (y - mu) / w
+    
+    # Compute the gradient of the loss function
+    grad = t(x) %*% (w * z)
+    
+    beta_new = beta + (solve(t(x) %*% diag(rep(w, nrow = nrow(x))) %*% x) %*% grad)
+
+    # Check for convergence
+    if (max(abs(beta_new - beta)) < tol) {
+      break
+    }
+    
+    if(iter%%10 == 0) print(paste("Iteration:", iter))
+    
+    # Update beta and continue iterating
+    beta = beta_new
+  }
+  
+  # calculate predicted values, covariance matrix, standard error of coefficients, z-values and p-values
+  p_hat = plogis(x %*% beta)
+  V = solve(t(x) %*% diag(c(p_hat * (1 - p_hat))) %*% x)
+  se = sqrt(diag(V))
+  z = beta / se
+  p = 2 * (1 - pnorm(abs(z)))
+  
+  # Return the coefficients, standard errors, z-values, and p-values as a list
+  return(list(coefficients = beta, se = se, z = z, p = p))
+}
+
+my_predict = function(summary, data){
+  coeffs = as.vector(summary$estimate)
+  data_new = data %>%
+    select(!c(compas)) %>%
+    mutate(intercept = 1) %>%
+    relocate(intercept, .before = 0) %>%
+    as.matrix()
+  
+  prob_high = plogis(data_new %*% coeffs)
+  
+  prob_low = 1 - prob_high
+  
+  df = data.frame(low = prob_low,
+                  high = prob_high)
+  
+  return(df)
+}
+```
+
+### Estimate model with custom optimization algorithm
+```{r}
+data_train_prep = recipe(compas ~ .,
+                         data = data_train) %>% 
+  step_dummy(all_nominal_predictors()) %>% 
+  prep() %>% 
+  bake(new_data = NULL) %>% 
+  mutate(compas = ifelse(compas == "High", 1, 0))
+
+model_base <- glm(compas ~ ., 
+                  data = data_train_prep, 
+                  family = binomial(link = "logit"),
+                  method = my_method)
+
+model_base_summary = data.frame(estimate = model_base$coefficients,
+                                se = as.vector(model_base$se),
+                                z = model_base$z,
+                                p_value = model_base$p)
+
+model_base_summary %>% 
+    slice(-1) %>% 
+    mutate(estimate = exp(estimate)) %>% 
+    mutate(estimate_percent = percent((estimate - 1), digits = 1)) %>% 
+    relocate(estimate_percent, .after = estimate)
+```
+
+### Calculate individual discrimination
 ```{r}
 # extract probabilities out of base model
-base_prob = predict(model_fit, 
-                    new_data = data_train, 
-                    type = "prob") %>% 
-  rename(low = .pred_Low,
-         high = .pred_High)
+base_prob = my_predict(summary = model_base_summary, 
+                       data = data_train_prep)
 
 # calculate proportion of cases where individual fairness is not given (D(Mx, My) > d(x,y))
-dist = diff_dist(base_prob = base_prob, 
-                 data_train = data_train, 
-                 metric = "statistic")
+dist_stat = diff_dist(base_prob = base_prob, 
+                      data_train = data_train, 
+                      metric = "statistic")
 
-dist$n_unfair_rel
+dist_linf = diff_dist(base_prob = base_prob, 
+                      data_train = data_train, 
+                      metric = "l_inf")
+
+dist_stat$n_unfair_rel
+dist_linf$n_unfair_rel
 ```
+
+### Save output
+```{r}
+saveRDS(dist_stat,
+        file = here("01_data", "02_data_processed", "02_individual",
+                    "01_dist_stat.rds"))
+
+saveRDS(dist_linf,
+        file = here("01_data", "02_data_processed", "02_individual",
+                    "02_dist_linf.rds"))
+
+dist_stat = readRDS(file = here("01_data", "02_data_processed", "02_individual",
+                                "01_dist_stat.rds"))
+
+dist_linf = readRDS(file = here("01_data", "02_data_processed", "02_individual",
+                                "02_dist_linf.rds"))
+```
+
 
 
 ## Pre-Processing
-```{r}
 
+```{r}
+metric_stat_fun
+metric_linf_fun
 ```
+
+
+
+### New loss function
+
+
+```{r}
+# Define a custom penalty function
+my_penalty_function <- function(beta, lambda) {
+  # Compute the L1 norm of the beta coefficients excluding the intercept term
+  l1_norm <- sum(abs(beta[-1]))
+  
+  # Return the penalty term
+  return(lambda * l1_norm)
+}
+
+y = iris$binary_response
+x = iris %>% 
+  select(!c(Species, binary_response)) %>% 
+  mutate(intercept = 1) %>% 
+  select(intercept,
+         Sepal.Length,
+         Sepal.Width,
+         Petal.Length,
+         Petal.Width) %>% 
+  as.matrix()
+
+test = my_method_with_user_penalty(y = y, x = x, family = binomial(link = "logit"))
+
+# Define a custom method function with user-specified penalty function
+my_method_with_user_penalty <- function(x, y, 
+                                        family = binomial(link = "logit"), 
+                                        control, ...) {
+  # Initialize the beta coefficients to zero
+  beta <- rep(0, ncol(x))
+  
+  # Set the maximum number of iterations to 100
+  max_iter <- 1000
+  
+  # Set the convergence threshold to 1e-6
+  tol <- 1e-6
+  
+  # Set the penalty weight to 0.5
+  lambda <- control$lambda
+  
+  # Set the penalty function
+  penalty_function <- control$penalty_function
+  
+  # Iterate until convergence or maximum number of iterations reached
+  for (iter in 1:max_iter) {
+    # Calculate the predicted probabilities using the current beta coefficients
+    eta = x %*% beta
+    mu = family$linkinv(eta)
+    
+    # Calculate the working response
+    w = mu * (1 - mu)
+    z = eta + (y - mu) / w
+    
+    # Compute the gradient of the loss function
+    grad = t(x) %*% (w * z)
+    
+    # Compute the penalty term gradient
+    pen_grad <- penalty_function(beta, lambda)
+    
+    # Compute the total gradient and update the beta coefficients
+    total_grad = grad + pen_grad
+    #total_grad = grad
+    beta_new = beta + (solve(t(x) %*% diag(rep(w, nrow = nrow(x))) %*% x) %*% total_grad)
+
+    # Check for convergence
+    if (max(abs(beta_new - beta)) < tol) {
+      break
+    }
+    
+    # Update beta and continue iterating
+    beta = beta_new
+  }
+  
+  p_hat = plogis(x %*% beta)
+  
+  V = solve(t(x) %*% diag(c(p_hat * (1 - p_hat))) %*% x)
+  # Compute the standard errors
+  se = sqrt(diag(V))
+  # Compute the z-values
+  z = beta / se
+  # Compute the p-values
+  p = 2 * (1 - pnorm(abs(z)))
+  # Return the coefficients, standard errors, z-values, and p-values as a list
+  return(list(coefficients = beta, se = se, z = z, p = p))
+}
+
+# Load the dataset
+data(iris)
+
+# Convert the response variable to binary
+iris$binary_response <- ifelse(iris$Species == "versicolor", 1, 0)
+
+# Fit a logistic regression model using the glm function with the custom method and user-specified penalty
+model <- glm(binary_response ~ Sepal.Length + Sepal.Width + Petal.Length + Petal.Width, 
+             data = iris, 
+             family = binomial(link = "logit"),
+             method = my_method_with_user_penalty,
+             control = list(lambda = 0.1, penalty_function = my_penalty_function))
+
+
+model_glm <- glm(binary_response ~ Sepal.Length + Sepal.Width + Petal.Length + Petal.Width, 
+             data = iris, 
+             family = binomial(link = "logit"))
+
+
+# View the model summary
+
+summary(model_glm)
+
+model_summary = data.frame(coefficients = model$coefficients,
+                           se = as.vector(model$se),
+                           z = model$z,
+                           p_value = model$p)
+model_summary
+```
+
 
