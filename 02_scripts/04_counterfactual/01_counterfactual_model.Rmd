@@ -39,14 +39,14 @@ rstan_options(auto_write = TRUE)
 ### Load data
 
 ```{r}
-data_train = readRDS(here("01_data", "02_data_processed", "01_base_model",
-                          "04_data_train.rds"))
+data = readRDS(here("01_data", "02_data_processed", "01_base_model",
+                    "03_data.rds"))
 ```
 
 ### Prepare data
 
 ```{r}
-data_counter = data_train %>% 
+data_counter = data %>% 
   select(Age = age,
          Sex = sex,
          Race = race,
@@ -58,10 +58,8 @@ data_counter = data_train %>%
   dummy_cols(select_columns = c("Race", "Sex"),
              remove_first_dummy = FALSE,
              remove_selected_columns = TRUE) %>% 
-  rename("Race_Native_American" = "Race_Native American",
-         "Race_African_American" = "Race_African-American") %>% 
-  mutate(Crime = ifelse(Crime == "F", 1, 0),
-         COMPAS = ifelse(COMPAS == "High", 1, 0)) 
+  rename("Race_African_American" = "Race_African-American") %>% 
+  mutate(Crime = ifelse(Crime == "F", 1, 0)) 
 
 colors = wes_palette("Darjeeling1")
 colors_discrete = rep(wes_palette("Darjeeling1"), 3)
@@ -163,14 +161,14 @@ n = nrow(data_counter)
 
 
 data_base_list = list(N = n,
-                         K = length(data_base_protected),
-                         prot = data.matrix(data_base_protected),
-                         age = data_counter[, "Age", drop = TRUE],
-                         priors = data_counter[, "Priors", drop = TRUE],
-                         crime = data_counter[, "Crime", drop = TRUE],
-                         juvmisd = data_counter[, "JuvMisd", drop = TRUE],
-                         juvfel = data_counter[, "JuvFel", drop = TRUE],
-                         compas = data_counter[, "COMPAS", drop = TRUE])
+                      K = length(data_base_protected),
+                      prot = data.matrix(data_base_protected),
+                      age = data_counter[, "Age", drop = TRUE],
+                      priors = data_counter[, "Priors", drop = TRUE],
+                      crime = data_counter[, "Crime", drop = TRUE],
+                      juvmisd = data_counter[, "JuvMisd", drop = TRUE],
+                      juvfel = data_counter[, "JuvFel", drop = TRUE],
+                      compas = data_counter[, "COMPAS", drop = TRUE])
 ```
 
 #### Fit base model
@@ -346,15 +344,11 @@ Functions for Weight Plotting
                 "_prot.3",
                 "_prot.4",
                 "_prot.5",
-                "_prot.6",
-                "_prot.7",
-                "_prot.8")
+                "_prot.6")
     
     replacement = c("_Race: Caucasian",
                     "_Race: African-American",
-                    "_Race: Asian",
                     "_Race: Hispanic",
-                    "_Race: Native-American",
                     "_Race: Other",
                     "_Sex: Male",
                     "_Sex: Female")
@@ -630,8 +624,7 @@ prediction_counter = function(params_df,
       as_tibble() %>% 
       group_by(value) %>% 
       summarise(n = n()) %>% 
-      mutate(value = factor(value, levels = c(0,1), labels = c("Low", "High")),
-             Data = factor(plot_text_bin))
+      mutate(Data = factor(plot_text_bin))
     
     if(ncol(plot_org_bin$data) == 2){
        plot_comp_bin = plot_org_bin$data %>% 

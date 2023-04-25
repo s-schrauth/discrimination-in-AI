@@ -23,41 +23,15 @@ tidymodels_prefer()
 ## Load data
 
 ```{r}
-data_clean = readRDS(here("01_data", "02_data_processed", "01_base_model",
-                          "03_data_clean.rds"))
+data = readRDS(here("01_data", "02_data_processed", "01_base_model",
+                    "03_data.rds"))
 ```
 
 ## Data preparation
-
-# Test-Train-Split for Evaluation
-```{r}
-set.seed(28934839)
-splits = initial_split(data_clean,
-                       prop = 0.9,
-                       strata = compas)
-
-data_train = training(splits)
-data_test = testing(splits)
-```
-
-Save Training and Testing Data
-```{r}
-saveRDS(data_train, 
-        file = here("01_data", "02_data_processed", "01_base_model",
-                    "04_data_train.rds")
-        )
-
-saveRDS(data_test, 
-        file = here("01_data", "02_data_processed", "01_base_model",
-                    "05_data_test.rds")
-        )
-```
-
-
 # Final Data Transformation
 ```{r}
 recipe = recipe(compas ~ .,
-                data = data_train) %>% 
+                data = data) %>% 
   step_dummy(all_nominal_predictors())
 ```
 
@@ -74,7 +48,7 @@ workflow = workflow() %>%
 
 model_fit = 
   workflow %>% 
-  fit(data = data_train)
+  fit(data = data)
 
 estimation = tidy(model_fit, exponentiate = TRUE)
 
@@ -84,19 +58,11 @@ estimation %>%
   relocate(estimate_percent, .after = estimate)
 ```
 
-```{r}
-model_out_of_sample_fit = 
-  workflow %>% 
-  last_fit(splits) %>% 
-  collect_metrics()
-
-model_out_of_sample_fit
-```
 
 ```{r}
 saveRDS(model_fit, 
         file = here("01_data", "02_data_processed", "01_base_model",
-                    "06_model_fit.rds")
+                    "04_model_fit.rds")
         )
 ```
 

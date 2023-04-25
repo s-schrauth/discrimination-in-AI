@@ -81,7 +81,7 @@ data_clean = data_raw %>%
          days_b_screening_arrest >= -30,
          is_recid != -1,
          charge_degree != "O") %>% 
-  mutate(compas = factor(compas != "Low", labels = c("Low","High"))) %>% 
+  mutate(compas = factor(ifelse(compas == "Low", 1, 0))) %>% 
   mutate(c_jail_in = floor_date(c_jail_in, unit = "day"),
          c_jail_out = floor_date(c_jail_out, unit = "day")) %>% 
   mutate(days_in_jail = as.numeric(round(difftime(c_jail_out, 
@@ -138,12 +138,13 @@ colors_discrete = rep(wes_palette("Darjeeling1"), 3)
 ```{r}
 eda_class = data_clean %>% 
   select(compas) %>% 
-  ggplot(aes(x = compas, fill = compas)) +
+  ggplot(aes(x = factor(compas), fill = factor(compas))) +
   geom_bar() +
   labs(title = "Class Frequencies in the Compas Dataset",
        subtitle = "With Class Variable 'COMPAS score'",
        x = "COMPAS score", 
        y = "Count") +
+  scale_x_discrete(labels = c("High Risk", "Low Risk")) +
   scale_fill_manual(values = colors_discrete) +
   guides(fill = "none")
 
@@ -399,13 +400,26 @@ ggsave("08_eda_sex_age.png",
        )
 ```
 
+## Final Data Cleaning with respect to results from EDA
+```{r}
+data = data_clean %>% 
+  mutate(race = factor(case_when(
+    race == "Asian" ~ "Other",
+    race == "Native American" ~ "Other",
+    .default = race
+                                )
+                      )
+         ) %>% 
+  mutate(race = fct_relevel(race, "Caucasian", after = 0))
+```
+
 
 ## Save data
 
 ```{r}
-saveRDS(data_clean, 
+saveRDS(data, 
         file = here("01_data", "02_data_processed", "01_base_model",
-                    "03_data_clean.rds")
+                    "03_data.rds")
         )
 ```
 

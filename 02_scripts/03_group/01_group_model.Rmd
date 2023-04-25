@@ -1,0 +1,73 @@
+---
+title: "Group Fairness Model"
+author: "Simon Schrauth"
+date: "`r Sys.Date()`"
+output: html_document
+---
+# Group Fairness
+
+## Goal
+
+After executing this script, the group fairness/discrimination of the base model should be determined.
+
+## Preparation
+### Install packages
+```{r}
+pacman::p_load(devtools,
+               tidyverse, 
+               here,
+               tidymodels,
+               DALEXtra)
+
+if(!require(fairmodels)) install_github("s-schrauth/fairmodels")
+
+library(fairmodels)
+
+tidymodels_prefer()
+```
+
+### Load data
+```{r}
+data = readRDS(here("01_data", "02_data_processed", "01_base_model",
+                    "03_data.rds"))
+
+model_fit = readRDS(file = here("01_data", "02_data_processed", "01_base_model",
+                                "04_model_fit.rds"))
+```
+
+## Group Fairness
+###
+```{r}
+y = model_fit$pre$mold$outcomes %>% 
+  as.vector() %>% 
+  unlist(use.names = FALSE) %>% 
+  as.numeric()
+
+model_base_explainer = explain_tidymodels(model = model_fit,
+                                          data = data,
+                                          y = y-1,
+                                          label = "Base Model")
+
+base_fairobj_sex = fairness_check(model_base_explainer,
+                                  protected  = data$sex,
+                                  privileged = "Male")
+
+base_fairobj_race = fairness_check(model_base_explainer,
+                                   protected  = data$race,
+                                   privileged = "Caucasian")
+
+plot(base_fairobj_sex, fairness_metrics = c("STP", "FPR", "FNR")) +
+  guides(fill = "none")
+
+plot(base_fairobj_race, fairness_metrics = c("STP", "FPR", "FNR")) +
+  guides(fill = "none")
+
+plot(group_metric(base_fairobj_sex, fairness_metric = "STP"))
+plot(group_metric(base_fairobj_race, fairness_metric = "STP"))
+
+plot(fairness_radar(base_fairobj_sex, fairness_metrics = c("STP", "FPR", "FNR")))
+plot(fairness_radar(base_fairobj_race, fairness_metrics = c("STP", "FPR", "FNR")))
+
+plot_density(base_fairobj_race)
+```
+
