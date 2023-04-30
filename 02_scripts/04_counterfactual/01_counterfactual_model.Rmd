@@ -180,7 +180,7 @@ fit_base = stan(file = here("02_scripts", "04_counterfactual",
                 data = data_base_list, 
                 iter = 2000, 
                 chains = 4,
-                seed = 21968725,
+                seed = 219684725,
                 verbose = TRUE)
 
 params_base = extract(fit_base)
@@ -211,7 +211,7 @@ params_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfac
 #### Have a look at sampled U_d parameter distributions
 
 ```{r}
-s = sample(seq(1,5553), 10)
+s = sample(seq(1,6172), 10)
 
 pc = as.data.frame(params_base)[,s] %>% 
   pivot_longer(cols = everything())
@@ -228,7 +228,7 @@ pc %>%
   coord_flip() 
 ```
 
-#### Compute median and median absolute deviaten (mad) of U_d and U_j distributions for all cases
+#### Compute median and median absolute deviation (mad) of U_d and U_j distributions for all cases
 
 ```{r}
 u_d = params_base %>% 
@@ -578,9 +578,9 @@ prediction_counter = function(params_df,
     geom_density(aes(x = logit),
                  linewidth = 1,
                  color = colors[color_nr]) +
-    labs(title = "Predicted Values for Probabilites of a High COMPAS Score",
+    labs(title = "Predicted Values for Probabilites of a Low COMPAS Score",
          subtitle = paste0("Histogram and Density Function for ", plot_text),
-         x = "Predicted Probability of a High COMPAS Score",
+         x = "Predicted Probability of a Low COMPAS Score",
          y = "Density") 
   
   # Plot for predicted COMPAS score
@@ -588,7 +588,7 @@ prediction_counter = function(params_df,
     as_tibble() %>% 
     group_by(value) %>% 
     summarise(n = n()) %>% 
-    mutate(value = factor(value, levels = c(0,1), labels = c("Low", "High"))) %>% 
+    mutate(value = factor(value, levels = c(1,0), labels = c("Low", "High"))) %>% 
     ggplot(aes(x = value, y = n)) +
     geom_col(fill = colors[color_nr]) +
     labs(title = "Predicted Values for COMPAS Score",
@@ -612,9 +612,9 @@ prediction_counter = function(params_df,
                    aes(x = logit),
                    linewidth = 1,
                    color = colors[color_nr]) +
-      labs(title = "Comparison of Predicted Values for Probabilites of a High COMPAS Score",
+      labs(title = "Comparison of Predicted Values for Probabilites of a Low COMPAS Score",
            subtitle = paste0("Histogram and Density Function for Original Data & Intervention Data"),
-           x = "Predicted Probability of a High COMPAS Score",
+           x = "Predicted Probability of a Low COMPAS Score",
            y = "Density") 
   }
   
@@ -625,7 +625,8 @@ prediction_counter = function(params_df,
       as_tibble() %>% 
       group_by(value) %>% 
       summarise(n = n()) %>% 
-      mutate(Data = factor(plot_text_bin))
+      mutate(Data = factor(plot_text_bin)) %>% 
+      mutate(value = factor(value, levels = c(1,0), labels = c("Low", "High")))
     
     if(ncol(plot_org_bin$data) == 2){
        plot_comp_bin = plot_org_bin$data %>% 
@@ -728,14 +729,16 @@ model_sex = model_counter(data = data_sex,
                           u_j = u_j, 
                           iter = 2000, 
                           chains = 4, 
-                          seed = 832457)
+                          seed = 6832453)
 
 pred_sex = prediction_counter(params_df = model_sex$params, 
                               data = data_sex, 
                               seed = 89358379,
-                              color_nr = 3, 
+                              color_nr = 3,
+                              ymin_age_weight = -1,
+                              ymax_age_weight = 1,
                               plot_text = "Intervention on Sex", 
-                              plot_text_bin = "Counterfactual", 
+                              plot_text_bin = "male <-> female", 
                               plot_org_logit = pred_base$plot_counter_logit, 
                               plot_org_bin = pred_base$plot_counter_bin)
 ```
@@ -763,13 +766,12 @@ pred_sex = readRDS(file = here("01_data", "02_data_processed", "04_counterfactua
 
 ???
 ```{r}
-bin_colors = unique(ggplot_build(pred_sexf$plot_comp_bin)$data[[1]]["fill"])
+bin_colors = unique(ggplot_build(pred_sex$plot_comp_bin)$data[[1]]["fill"])
 
 sex_comp_logit = pred_sex$plot_comp_logit +
-                    geom_label(x = 0.58, y = 2, label = "Original", color = bin_colors[1,1]) +
-                    geom_label(x = 0.08, y = 1.4, label = "Male", color = bin_colors[2,1]) +
-                    geom_label(x = 0.8, y = 1.25, label = "Female", color = bin_colors[3,1]) 
-
+                    geom_label(x = 0.55, y = 1.25, label = "Original", color = bin_colors[1,1]) +
+                    geom_label(x = 0.2, y = 1.2, label = "Counterfactual", color = bin_colors[2,1]) 
+  
 ```
 
 ##### Intervention on Race: Whites are Blacks, Blacks are Whites now, the other races stay the same
@@ -794,7 +796,7 @@ model_race_wb = model_counter(data = data_race_wb,
 
 pred_race_wb = prediction_counter(params_df = model_race_wb$params, 
                                   data = data_race_wb, 
-                                  color_nr = 4, 
+                                  color_nr = 1, 
                                   seed = 49586783,
                                   plot_text = "Intervention on Race White <-> Black", 
                                   plot_text_bin = "white <-> black", 
@@ -846,7 +848,7 @@ model_race_wh = model_counter(data = data_race_wh,
 
 pred_race_wh = prediction_counter(params_df = model_race_wh$params, 
                                   data = data_race_wh, 
-                                  color_nr = 4, 
+                                  color_nr = 1, 
                                   seed = 28975065,
                                   plot_text = "Intervention on Race White <-> Hispanic", 
                                   plot_text_bin = "white <-> hispanic", 
@@ -899,7 +901,7 @@ model_race_wo = model_counter(data = data_race_wo,
 
 pred_race_wo = prediction_counter(params_df = model_race_wo$params, 
                                   data = data_race_wo, 
-                                  color_nr = 4, 
+                                  color_nr = 1, 
                                   seed = 455927483,
                                   plot_text = "Intervention on Race White <-> Others", 
                                   plot_text_bin = "white <-> others", 
@@ -920,7 +922,7 @@ saveRDS(pred_race_wo,
         )
 
 model_race_wo = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
-                                    "10_model_race_wo.rds")
+                                    "11_model_race_wo.rds")
                        )
 
 pred_race_wo = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
@@ -928,11 +930,90 @@ pred_race_wo = readRDS(file = here("01_data", "02_data_processed", "04_counterfa
                       )
 ```
 
+### Weight comparison
+```{r}
+# Sex
+pred_base$weight_table %>% 
+  select(starts_with("compas_Sex"))
+
+pred_sex$weight_table %>% 
+  select(starts_with("compas_Sex"))
+
+# Race
+pred_base$weight_table %>% 
+  select(starts_with("compas_Race"))
+
+pred_race_wb$weight_table %>% 
+  select(starts_with("compas_Race"))
+pred_race_wh$weight_table %>% 
+  select(starts_with("compas_Race"))
+pred_race_wo$weight_table %>% 
+  select(starts_with("compas_Race"))
+```
+
+```{r}
+pred_sex$plot_comp_logit
+pred_sex$plot_comp_bin
+
+pred_race_wb$plot_comp_logit
+pred_race_wb$plot_comp_bin
+
+pred_race_wh$plot_comp_logit
+pred_race_wh$plot_comp_bin
+
+pred_race_wo$plot_comp_logit
+pred_race_wo$plot_comp_bin
+```
 ### Save graphs
 ```{r}
 
 ```
 
+
+### Epsilon-delta-approximate counterfactual fairness
+#### Function for approximate counterfactual fairness
+```{r}
+approx_counterfairness = function(base_outcome = pred_base$counter_pred,
+                                  counter_outcome,
+                                  epsilon = 0.1){
+  
+  diff = abs(base_outcome-counter_outcome)
+  
+  p = diff < epsilon
+  
+  delta = 1 - sum(p)/length(p)
+  
+  return(delta)
+}
+```
+
+
+
+#### Sex
+```{r}
+delta_sex = approx_counterfairness(base_outcome = pred_base$counter_pred,
+                                   counter_outcome = pred_sex$counter_pred,
+                                   epsilon = 0.1)
+
+1-delta_sex
+```
+#### Race
+```{r}
+delta_wb = approx_counterfairness(base_outcome = pred_base$counter_pred,
+                                  counter_outcome = pred_race_wb$counter_pred,
+                                  epsilon = 0.1)
+
+delta_wh = approx_counterfairness(base_outcome = pred_base$counter_pred,
+                                  counter_outcome = pred_race_wh$counter_pred,
+                                  epsilon = 0.1)
+
+delta_wo = approx_counterfairness(base_outcome = pred_base$counter_pred,
+                                  counter_outcome = pred_race_wo$counter_pred,
+                                  epsilon = 0.1)
+
+delta_race = max(delta_wb, delta_wh, delta_wo)
+1-delta_race
+```
 
 ## Post-Processing: ROC-Pivot
 Function for theta calculation
@@ -947,87 +1028,91 @@ rejected_function = function(data, privileged){
   d = data %>% 
     select(all_of(privileged))
   
-  output = ifelse(d == 1, 1, 0)
+  output = ifelse(d == 1, 0, 1)
   
   return(output)
 }
 
-diff_calc = function(theta,
-                     data_priv,
-                     data_logit_priv,
-                     data, 
-                     data_logit, 
-                     prot, 
-                     priv){
+delta_calc = function(theta,
+                      epsilon = 0.1,
+                      data_base = data_base,
+                      logit_base,
+                      data_counter, 
+                      logit_counter, 
+                      prot, 
+                      priv){
   
-  upper = 0
-  .5 + theta
+  upper = 0.5 + theta
   lower = 0.5 - theta
   
-  d_priv = data_priv %>% 
-    mutate(logit = data_logit_priv) %>% 
+  d_base = data_base %>% 
+    mutate(logit = logit_base) %>% 
     select(starts_with(prot),
            logit)
   
-  d_priv_count = d_priv %>% 
-    mutate(bin = ifelse((logit < lower | logit > upper),
+  d_base_outcome = d_base %>% 
+    mutate(outcome = ifelse((logit < lower | logit > upper),
                     normal_function(logit),
                     rejected_function(data = ., privileged = priv))
-           ) %>% 
-    group_by(bin) %>% 
-    summarise(n_priv = n())
+           ) 
   
-  diffs = c()
+
+  deltas = c()
   
-  for (i in 1:length(data)) {
-    d_unpriv = data[[i]] %>% 
-      mutate(logit = data_logit[[i]]) %>% 
+  for (i in 1:length(data_counter)) {
+    d_counter = data_counter[[i]] %>% 
+      mutate(logit = logit_counter[[i]]) %>% 
       select(starts_with(prot),
              logit)
     
-    d_unpriv_count = d_unpriv %>% 
-      mutate(bin = ifelse((logit < lower | logit > upper),
-                      normal_function(logit),
-                      rejected_function(data = ., privileged = priv))
-             ) %>% 
-      group_by(bin) %>% 
-      summarise(n_unpriv = n())
+    # d_counter_outcome = d_counter %>%
+    #   mutate(outcome = ifelse((logit < lower | logit > upper),
+    #                   normal_function(logit),
+    #                   rejected_function(data = ., privileged = priv))
+    #          )
     
-    diffs[i] = abs(d_unpriv_count$n_unpriv[1] - d_priv_count$n_priv[1])
+    d_counter_outcome = d_counter %>%
+      mutate(outcome = normal_function(logit))
+    
+    deltas[i] = approx_counterfairness(base_outcome = d_base_outcome$outcome,
+                                       counter_outcome = d_counter_outcome$outcome,
+                                       epsilon = epsilon)
   }
   
-  diff = sum(diffs)
+  delta = max(deltas)
   
-  return(diff)
+  return(delta)
 }
 
 theta_calc = function(theta_lower = 0,
-                      theta_upper = 0.1,
-                      step = 0.001,
-                      data_priv,
-                      data_logit_priv,
-                      data, 
-                      data_logit, 
+                      theta_upper = 0.05,
+                      step = 0.01,
+                      epsilon = 0.1,
+                      data_base = data_base,
+                      logit_base,
+                      data_counter, 
+                      logit_counter, 
                       prot, 
                       priv){
   
   grid = seq(theta_lower, theta_upper, step)
   
   df = data.frame(theta = grid,
-                  diff = NA)
+                  delta = NA)
 
   for(i in 1:length(grid)){
-    df$diff[i] = diff_calc(theta = df$theta[i],
-                           data_priv = data_priv,
-                           data_logit_priv = data_logit_priv,
-                           data = data, 
-                           data_logit = data_logit,
-                           prot = prot,
-                           priv = priv)
+    df$delta[i] = delta_calc(theta = df$theta[i],
+                             epsilon = epsilon,
+                             data_base = data_base,
+                             logit_base = logit_base,
+                             data_counter = data_counter, 
+                             logit_counter = logit_counter, 
+                             prot = prot, 
+                             priv = priv)
   }
   
   output = df %>% 
-    filter(diff == min(diff)) %>% 
+    filter(delta == min(delta)) %>% 
     as.list()
   
   return(output)
@@ -1035,218 +1120,58 @@ theta_calc = function(theta_lower = 0,
 
 ```
 
-Function for ROC-corrected prediction & plotting COMPAS score
-```{r}
-prediction_roc = function(data_logit, 
-                          data,
-                          theta,
-                          priv,
-                          seed = 3928567, 
-                          color_nr,
-                          plot_text,
-                          plot_text_bin,
-                          plot_text_bin_other = NULL,
-                          plot_org_bin = NULL){
-  
-  # Calculate predicted values for COMPAS score
-  set.seed(seed)
-  
-  upper = 0.5 + theta
-  lower = 0.5 - theta
-  
-  data_with_logit = data %>% 
-    mutate(logit = data_logit)
-  
-  counter_pred = ifelse((data_with_logit$logit < lower | data_with_logit$logit > upper),
-                        normal_function(data_with_logit$logit),
-                        rejected_function(data = data_with_logit, privileged = priv))
-  
-  ## Plots for predictions
-  colors = wes_palette("Darjeeling1")
-  
-  # Plot for predicted COMPAS score
-  plot_counter_bin = counter_pred %>% 
-    as_tibble() %>% 
-    group_by(value) %>% 
-    summarise(n = n()) %>% 
-    mutate(value = factor(value, levels = c(0,1), labels = c("Low", "High"))) %>% 
-    ggplot(aes(x = value, y = n)) +
-    geom_col(fill = colors[color_nr]) +
-    labs(title = "Predicted Values for COMPAS Score",
-         subtitle = paste0("Absolute Frequency of Predicted Score Values for ", plot_text),
-         x = "COMPAS Score",
-         y = "Predicted Frequency") 
-  
-  ## Plots for comparison of model predictions and base model predictions
-  plot_comp_bin = NULL
-  
-  # Plot for comparison of predicted COMPAS scores in model and base model
-  if(!is.null(plot_org_bin)){
-    
-    counter_pred_plot = counter_pred %>% 
-      as_tibble() %>% 
-      group_by(value) %>% 
-      summarise(n = n()) %>% 
-      mutate(value = factor(value, levels = c(0,1), labels = c("Low", "High")),
-             Data = factor(plot_text_bin))
-    
-  if(ncol(plot_org_bin$data) == 2){
-       plot_comp_bin = plot_org_bin$data %>% 
-        mutate(Data = factor(plot_text_bin_other)) %>% 
-        rbind(counter_pred_plot) %>% 
-        group_by(Data) %>% 
-        ggplot(aes(x = value, y = n, fill = Data)) +
-        geom_col(position = position_dodge(0.82), width = 0.8) +
-        labs(title = "Comparison of Predicted Values for COMPAS Score (ROC-corrected)",
-             subtitle = paste0("Frequency of Predicted Score Values for ROC-corrected Intervention Data"),
-             x = "COMPAS Score",
-             y = "Predicted Frequency") +
-        scale_fill_manual(values = c(unique(ggplot_build(plot_org_bin)$data[[1]]["fill"])[["fill"]],
-                                     colors[color_nr]))
-    } else {
-      plot_comp_bin = plot_org_bin$data %>% 
-        rbind(counter_pred_plot) %>% 
-        group_by(Data) %>% 
-        ggplot(aes(x = value, y = n, fill = Data)) +
-        geom_col(position = position_dodge(0.82), width = 0.8) +
-        labs(title = "Comparison of Predicted Values for COMPAS Score",
-             subtitle = paste0("Frequency of Predicted Score Values for Original Data & Intervention Data"),
-             x = "COMPAS Score",
-             y = "Predicted Frequency") +
-        scale_fill_manual(values = c(as.vector(unique(ggplot_build(plot_org_bin)$data[[1]]["fill"])[["fill"]]),
-                                     colors[color_nr]))
-    }
-  }
-  
-  # Output list
-  output = list(counter_pred = counter_pred,
-                plot_counter_bin = plot_counter_bin,
-                plot_comp_bin = plot_comp_bin)
-  
-  return(output)
-}
-```
-
-
 ### Calculate theta for Sex
 ```{r}
-theta_calc(theta_lower = 0,
-           theta_upper = 0.1,
-           step = 0.001,
-           data_priv = data_sexm,
-           data_logit_priv = pred_sexm$counter_pred_logit,
-           data = list(data_sexf), 
-           data_logit = list(pred_sexf$counter_pred_logit),
-           prot = "Sex", priv = "Sex_Male")
+delta_calc(theta = 0.02,
+           epsilon = 0.1,
+           data_base = data_base,
+           logit_base = pred_base$counter_pred_logit,
+           data_counter = list(data_sex),
+           logit_counter = list(pred_sex$counter_pred_logit),
+           prot = "Sex",
+           priv = "Sex_Male") 
 
-diff_calc(theta = 0.1,
-          data_priv = data_sexm,
-          data_logit_priv = pred_sexm$counter_pred_logit,
-          data = list(data_sexf), 
-          data_logit = list(pred_sexf$counter_pred_logit),
-          prot = "Sex", priv = "Sex_Male")
-
-theta_sex = 0
+theta_sex = theta_calc(theta_lower = 0,
+                       theta_upper = 0.05,
+                       step = 0.001,
+                       epsilon = 0.1,
+                       data_base = data_base,
+                       logit_base = pred_base$counter_pred_logit,
+                       data_counter = list(data_sex),
+                       logit_counter = list(pred_sex$counter_pred_logit),
+                       prot = "Sex",
+                       priv = "Sex_Male")
 ```
 
-```{r}
-plot_sex_logit = pred_sexf$plot_comp_logit
 
-plot_sex_logit +
-  annotate("rect", xmin = 0.5 - theta_sex, xmax = 0.5 + theta_sex,
-           ymin = layer_scales(plot_sex_logit)$y$get_limits()[1], 
-           ymax = layer_scales(plot_sex_logit)$y$get_limits()[2],
-           alpha = 0.5,
-           fill = colors[5]) +
-  annotate("text", 
-           x = 0.5,
-           y = layer_scales(plot_sex_logit)$y$get_limits()[2] + 0.1, 
-           label = "Critical Zone", 
-           color = colors[5])
-```
-
-```{r}
-roc_sexm = prediction_roc(data_logit = pred_sexm$counter_pred_logit, 
-                          data = data_sexm,
-                          theta = 0,
-                          priv = "Sex_Female",
-                          seed = 3928567, 
-                          color_nr = 3, 
-                          plot_text = "Intervention Sex -> Male", 
-                          plot_text_bin = "Male",
-                          plot_text_bin_other = NULL,
-                          plot_org_bin = NULL)
-
-roc_sexf = prediction_roc(data_logit = pred_sexf$counter_pred_logit, 
-                          data = data_sexf,
-                          theta = 0,
-                          priv = "Sex_Female",
-                          seed = 3928567, 
-                          color_nr = 1, 
-                          plot_text = "Intervention Sex -> Female", 
-                          plot_text_bin = "Female", 
-                          plot_text_bin_other = "Male",
-                          plot_org_bin = roc_sexm$plot_counter_bin)
-
-roc_sexf$plot_comp_bin
-
-
-p = roc_sexm$plot_counter_bin
-
-ggplot_build(p)
-```
 ### Calculate theta for Race
 ```{r}
-theta_calc(theta_lower = 0,
-           theta_upper = 0.1,
-           step = 0.001,
-           data_priv = data_racewhite,
-           data_logit_priv = pred_racewhite$counter_pred_logit,
-           data = list(data_raceblack, 
-                       data_raceasian,
-                       data_racehisp,
-                       data_racenative,
-                       data_raceother), 
-           data_logit = list(pred_raceblack$counter_pred_logit, 
-                             pred_raceasian$counter_pred_logit,
-                             pred_racehisp$counter_pred_logit, 
-                             pred_racenative$counter_pred_logit,
-                             pred_raceother$counter_pred_logit),
-           prot = "Race", priv = "Race_Caucasian")
+delta_calc(theta = 0.02,
+           epsilon = 0.1,
+           data_base = data_base,
+           logit_base = pred_base$counter_pred_logit,
+           data_counter = list(data_race_wb, 
+                               data_race_wh, 
+                               data_race_wo),
+           logit_counter = list(pred_race_wb$counter_pred_logit,
+                                pred_race_wh$counter_pred_logit,
+                                pred_race_wo$counter_pred_logit),
+           prot = "Race",
+           priv = "Race_Caucasian") 
 
-diff_calc(theta = 0.1,
-          data_priv = data_racewhite,
-          data_logit_priv = pred_racewhite$counter_pred_logit,
-          data = list(data_raceblack, 
-                      data_raceasian,
-                      data_racehisp,
-                      data_racenative,
-                      data_raceother),
-          data_logit = list(pred_sexm$counter_pred_logit, pred_sexf$counter_pred_logit),
-          data_logit = list(pred_raceblack$counter_pred_logit, 
-                            pred_raceasian$counter_pred_logit,
-                            pred_racehisp$counter_pred_logit, 
-                            pred_racenative$counter_pred_logit,
-                            pred_raceother$counter_pred_logit),
-          prot = "Race", priv = "Race_Caucasian")
-
-theta_race = NA
+theta_race = theta_calc(theta_lower = 0,
+                        theta_upper = 0.005,
+                        step = 0.0001,
+                        epsilon = 0.1,
+                        data_base = data_base,
+                        logit_base = pred_base$counter_pred_logit,
+                        data_counter = list(data_race_wb, 
+                                            data_race_wh, 
+                                            data_race_wo),
+                        logit_counter = list(pred_race_wb$counter_pred_logit,
+                                             pred_race_wh$counter_pred_logit,
+                                             pred_race_wo$counter_pred_logit),
+                        prot = "Race",
+                        priv = "Race_Caucasian")
 ```
-
-
-
-```{r}
-sexm_eval = data_base %>% 
-  mutate(logit = pred_base$counter_pred_logit,
-         bin = pred_base$counter_pred,
-         logit_sexm = pred_sexm$counter_pred_logit,
-         bin_sexm = pred_sexm$counter_pred) %>% 
-  mutate(logit_diff = logit-logit_sexm,
-         bin_diff = factor(bin-bin_sexm)) 
-
-hist(sexm_eval$logit_diff)
-barplot(table(sexm_eval$bin_diff))
-
-```
-
 

@@ -231,7 +231,7 @@ model_base = readRDS(file = here("01_data", "02_data_processed", "02_individual"
                                  "01_model_base.rds"))
 
 dist_base = readRDS(file = here("01_data", "02_data_processed", "02_individual", "big_data",
-                                     "01_dist_base.rds"))
+                                "01_dist_base.rds"))
 ```
 
 
@@ -246,7 +246,29 @@ my_penalty_function <- function(mu, x, metric) {
   
   data = x[,2:ncol(x)] %>% 
     as.data.frame() %>% 
-    mutate(compas = NA)
+    mutate(compas = NA) %>% 
+    mutate(sex = factor(ifelse(sex_Female == 1, "Female", "Male"))) %>% 
+    mutate(race = factor(case_when(
+                                    race_African.American == 1 ~ "African American",
+                                    race_Hispanic == 1 ~ "Hispanic",
+                                    race_Other == 1 ~ "Other",
+                                    .default = "Caucasian"
+                                  )
+                         )
+           ) %>% 
+    mutate(charge_degree = factor(ifelse(charge_degree_M == 1, "M", "F"))) %>% 
+    mutate(two_year_recid = factor(ifelse(two_year_recid_yes == 1, "yes", "no"))) %>% 
+    select(sex,
+           race,
+           age,
+           days_in_jail,
+           juv_fel_count,
+           juv_misd_count,
+           juv_other_count,
+           priors_count,
+           charge_degree,
+           two_year_recid,
+           compas)
 
   dist = diff_dist(prob = prob, data = data)
 
@@ -330,7 +352,7 @@ results_fair = c()
 
 results_acc = c()
 
-lambda = 1
+lambda = 10
 
 for (lambda in lambdas) {
   print(paste("Lambda:", lambda))
@@ -347,22 +369,21 @@ for (lambda in lambdas) {
                                   z = model_temp$z,
                                   p_value = model_temp$p)
   
-  pen_prob = my_predict(summary = model_fair_summary, 
+  pen_prob = my_predict(summary = model_temp_summary, 
                         data = data_prep)
   
 
   dist_linf_pen = diff_dist(prob = pen_prob, 
                             data = data)
   
-  library(MLmetrics)
   logloss = LogLoss(base_prob$low, data_prep$compas)
   
   results_fair = append(results_fair, values = dist_linf_pen$n_unfair_rel)
   results_acc = append(results_acc, values = logloss)
 }
 lambda = c(1,)
-results_fair = c()
-results_acc = c()
+results_fair = c(0.1632184, 0.3308836, 0.1712977)
+results_acc = c(2.157753,2.157753, 2.157753)
 ```
 
 ### Final fair model
