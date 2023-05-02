@@ -36,6 +36,11 @@ options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 ```
 
+### Source Function Script
+```{r}
+source(file = here("02_scripts", "04_counterfactual", "00_counterfactual_functions.R"))
+```
+
 ### Load data
 
 ```{r}
@@ -187,7 +192,6 @@ params_base = extract(fit_base)
 ```
 
 #### Save base model
-
 ```{r}
 saveRDS(fit_base, 
         file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
@@ -198,7 +202,9 @@ saveRDS(params_base,
         file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
                     "02_model_base_params.rds")
         )
+```
 
+```{r}
 fit_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", "big_data",
                                "01_model_base_fit.rds")
         )
@@ -208,15 +214,15 @@ params_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfac
         )
 ```
 
-#### Have a look at sampled U_d parameter distributions
+#### Check sampled U_d parameter distributions
 
 ```{r}
 s = sample(seq(1,6172), 10)
 
-pc = as.data.frame(params_base)[,s] %>% 
+param_dist = as.data.frame(params_base)[,s] %>% 
   pivot_longer(cols = everything())
 
-pc %>% 
+param_dist %>% 
   ggplot(aes(x = name, y = value, fill = name)) +
   ggdist::stat_halfeye(
     adjust = 0.75,
@@ -259,7 +265,6 @@ u_j = params_base %>%
 ```
 
 #### Save U_d and U_j medians and mads
-
 ```{r}
 saveRDS(u_d, 
         file = here("01_data", "02_data_processed", "04_counterfactual",
@@ -270,7 +275,9 @@ saveRDS(u_j,
         file = here("01_data", "02_data_processed", "04_counterfactual",
                     "02_uj.rds")
         )
+```
 
+```{r}
 u_d = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual",
                           "01_ud.rds")
         )
@@ -281,403 +288,12 @@ u_j = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual",
 ```
 
 ### Counterfactual Analysis
-
-#### Function definitions
-
-Function for modelling
-
-```{r}
-model_counter = function(data, 
-                         u_d = u_d, 
-                         u_j = u_j, 
-                         iter = 2000, 
-                         chains = 4, 
-                         seed = 34568979){
-  
-  # Define protected variables
-  data_prot = data %>% 
-    select(starts_with(c("Race_", "Sex_"))) 
-  
-  n = nrow(data)
-
-  # Create list for Stan file
-  data_list= list(N = n,
-                  K = length(data_prot),
-                  prot = data.matrix(data_prot),
-                  age = data[, "Age", drop = TRUE],
-                  priors = data[, "Priors", drop = TRUE],
-                  crime = data[, "Crime", drop = TRUE],
-                  juvmisd = data[, "JuvMisd", drop = TRUE],
-                  juvfel = data[, "JuvFel", drop = TRUE],
-                  compas = data[, "COMPAS", drop = TRUE],
-                  mu_d = u_d[, "median", drop = TRUE],
-                  sigma_d = u_d[, "mad", drop = TRUE],
-                  mu_j = u_j[, "median", drop = TRUE],
-                  sigma_j = u_j[, "mad", drop = TRUE])
-  
-  # Calculate model with Stan
-  fit = stan(file = here("02_scripts", "04_counterfactual",
-                         "03_counterfactual_model_general.stan"), 
-             data = data_list, 
-             iter = iter,
-             chains = chains,
-             seed = seed,
-             verbose = TRUE)
-  
-  # Extract model parameter/weight distribution
-  params = extract(fit)
-  
-  output = list(fit = fit,
-                params = params)
-  
-  return(output)
-}
-```
-
-Functions for Weight Plotting
-
-```{r}
-# Function for correct naming of protected variables
-param_names = function(col){
-  
-    pattern = c("_prot.1", 
-                "_prot.2",
-                "_prot.3",
-                "_prot.4",
-                "_prot.5",
-                "_prot.6")
-    
-    replacement = c("_Race: Caucasian",
-                    "_Race: African-American",
-                    "_Race: Hispanic",
-                    "_Race: Other",
-                    "_Sex: Male",
-                    "_Sex: Female")
-    
-    for (i in 1:length(pattern)){
-      col = str_replace(col, pattern[i], replacement[i])
-    }
-    
-    return(col)
-}
-
-# Function for plot of compas weights (except age variable)
-plot_compas_weights = function(data, plot_text){
-  
-  colors_discrete = rep(wes_palette("Darjeeling1"), 3)
-  
-  plot = data %>% 
-     as.data.frame() %>% 
-     select(starts_with("compas"),
-            -c("compas_age")) %>% 
-     rename_with(.cols = everything(), 
-                 .fn = ~ param_names(.x)) %>%
-     rename_with(.cols = everything(), 
-                 .fn = ~ str_replace(.x, "compas_", "")) %>% 
-     rename_with(.cols = everything(), 
-                 .fn = ~ str_replace(.x, "bias", "Bias")) %>% 
-     rename_with(.cols = everything(), 
-                 .fn = ~ str_replace(.x, "ud", "Ud")) %>%   
-     pivot_longer(cols = everything()) %>%
-     ggplot(aes(x = name, y = value, fill = name)) +
-        ggdist::stat_halfeye(
-          adjust = 0.75,
-          justification = -.05,
-          .width = 0,
-          point_colour = NA
-        ) +
-        geom_boxplot(
-          width = .12,
-          outlier.colour = NA,
-          alpha = 0.5
-        ) +
-        geom_abline(intercept = 0, slope = 0) +
-        scale_fill_manual(values = colors_discrete) +
-        guides(fill = "none") +
-        labs(title = "Posterior Distribution of Model Weights",
-             subtitle = paste0("Only Weights for COMPAS Equation (without Age) for ", plot_text),
-             y = "Weight Value",
-             x = "Weight for COMPAS Prediction") +
-        coord_flip() 
-  
-  return(plot)
-}
-
-# Function for plot of compas weights (only age variable)
-plot_compas_weights_age = function(data, plot_text, ymin = -0.5, ymax = 0){
-  
-  colors_discrete = rep(wes_palette("Darjeeling1"), 3)
-  
-  plot = data %>% 
-     as.data.frame() %>% 
-     select(c("compas_age")) %>% 
-     rename_with(.cols = everything(), 
-                 .fn = ~ str_replace(.x, "compas_age", "Age")) %>% 
-     rename_with(.cols = everything(), 
-                 .fn = ~ param_names(.x)) %>%
-     rename_with(.cols = everything(), 
-                 .fn = ~ str_replace(.x, "compas_", "")) %>% 
-     rename_with(.cols = everything(), 
-                 .fn = ~ str_replace(.x, "bias", "Bias")) %>% 
-     rename_with(.cols = everything(), 
-                 .fn = ~ str_replace(.x, "ud", "Ud")) %>%   
-     pivot_longer(cols = everything()) %>%
-     ggplot(aes(x = name, y = value, fill = name)) +
-        ggdist::stat_halfeye(
-          adjust = 0.75,
-          justification = -.05,
-          .width = 0,
-          point_colour = NA
-        ) +
-        geom_boxplot(
-          width = .12,
-          outlier.colour = NA,
-          alpha = 0.5
-        ) +
-        geom_abline(intercept = 0, slope = 0) +
-        scale_fill_manual(values = colors_discrete) +
-        guides(fill = "none") +
-        ylim(ymin, ymax) +
-        labs(title = "Posterior Distribution of Model Weights",
-             subtitle = paste0("Only Weights for COMPAS Equation (only Age) for ", plot_text),
-             y = "Weight Value",
-             x = "Weight for COMPAS Prediction") +
-        coord_flip() 
-  
-  return(plot)
-}
-
-# Function for table of the median and mad of all weights
-weight_table = function(data){
-  data %>% 
-    as.data.frame() %>% 
-    select(-starts_with("u_d"), 
-           -starts_with("u_j"), 
-           -lp__) %>% 
-    rename_with(.cols = everything(), 
-                .fn = ~ param_names(.x)) %>% 
-    summarise(across(everything(),
-                     list(median = median,
-                          mad = mad))) %>% 
-    round(digits = 2) %>% 
-    pivot_longer(cols = everything(),
-                 names_to = c("variable",
-                              "metric"),
-                 names_pattern = "(.*)_([a-z]*)$") %>% 
-    pivot_wider(names_from = "variable") %>% 
-    column_to_rownames(var = "metric")
-}
-```
-
-Functions for Prediction & Plotting (adapted code from [https://medium.com/\@alex.pavlakis/making-predictions-from-stan-models-in-r-3e349dfac1ed](https://medium.com/@alex.pavlakis/making-predictions-from-stan-models-in-r-3e349dfac1ed){.uri})
-
-```{r}
-# Function for prediction of logit values of given data frame
-prediction_counter_logit = function(data, params_df, fun, seed){
-  
-  set.seed((seed))
-  
-  # Only U_d, U_j and compas weights are relevant
-  params_df_new = params_df %>% 
-    select(starts_with(c("u_", "compas_")))
-  
-  # Sample a parameter set for each observation
-  params = data.frame(matrix(NA, nrow = nrow(data), ncol = ncol(params_df_new)))
-  colnames(params) = colnames(params_df_new)
-  
-  for (i in 1:ncol(params)) {
-    params[,i] = sample(params_df_new[,i], size = nrow(params), replace = TRUE)
-  }
-  
-  # Define certain parameter and variable data frames
-  param_prot = params %>% 
-    select(starts_with("compas_prot"))
-  
-  data_prot = data %>% 
-    select(starts_with(c("Race_", "Sex_"))) %>% 
-    as.matrix()
-  
-  data_ud = params %>% 
-    select(starts_with("u_d")) %>% 
-    as.matrix() %>% 
-    t()
-  
-  # Create empty matrix for results
-  inv_logit_raw = matrix(NA,
-                         nrow = nrow(data),
-                         ncol = ncol(data_ud)) 
-  
-  # Loop over all possible U_d values (4000 per observation)
-  for (i in 1:ncol(data_ud)) {
-    
-      # Calculate linear combination for COMPAS equation for all observations
-      lin_comb = params$compas_bias + 
-                 params$compas_age * data$Age + 
-                 rowSums(param_prot * data_prot) +
-                 as.vector(params$compas_ud * data_ud[,i])
-  
-      # Calculate logit for all observations
-      inv_logit_raw[,i] = 1/(1 + exp(-lin_comb))
-  }
-
-  # Summarise logits over all possible U_d values with function "fun" (e.g. median)
-  inv_logit = apply(inv_logit_raw, 1, fun)
-  
-  return(inv_logit)
-}
-```
-
-```{r}
-# Function for prediction dataframes and prediction plots (incl. weights) 
-prediction_counter = function(params_df, 
-                              data, 
-                              threshold = 0.5, 
-                              seed = 3928567, 
-                              ymin_age_weight = -0.5,
-                              ymax_age_weight = 0,
-                              color_nr,
-                              plot_text,
-                              plot_text_bin,
-                              plot_org_logit = NULL,
-                              plot_org_bin = NULL){
-  
-  # Calculate predicted values for logits and COMPAS score
-  counter_pred_logit = prediction_counter_logit(params_df = params_df %>% as.data.frame(),
-                                                data = data,
-                                                fun = "median",
-                                                seed = seed)
-  
-  counter_pred = ifelse(counter_pred_logit >= threshold, 1, 0)
-  
-  # Calculate accuracy of prediction
-  accuracy = mean((counter_pred == data$COMPAS))
-  
-  # Plots for weights
-  plot_compas_weights = plot_compas_weights(data = params_df, 
-                                            plot_text = plot_text)
-  
-  plot_compas_weights_age = plot_compas_weights_age(data = params_df, 
-                                                    plot_text = plot_text, 
-                                                    ymin = ymin_age_weight, 
-                                                    ymax = ymax_age_weight)
-  weight_table = weight_table(data = params_df)
-  
-  
-  ## Plots for predictions
-  colors = wes_palette("Darjeeling1")
-  
-  # Plot for predicted logits
-  plot_counter_logit = counter_pred_logit %>% 
-    as_tibble() %>% 
-    rename(logit = value) %>% 
-    ggplot(aes()) +
-    geom_histogram(aes(x = logit, y = after_stat(density)), 
-                   bins = 30, 
-                   fill = colors[color_nr],
-                   alpha = 0.3) +
-    geom_density(aes(x = logit),
-                 linewidth = 1,
-                 color = colors[color_nr]) +
-    labs(title = "Predicted Values for Probabilites of a Low COMPAS Score",
-         subtitle = paste0("Histogram and Density Function for ", plot_text),
-         x = "Predicted Probability of a Low COMPAS Score",
-         y = "Density") 
-  
-  # Plot for predicted COMPAS score
-  plot_counter_bin = counter_pred %>% 
-    as_tibble() %>% 
-    group_by(value) %>% 
-    summarise(n = n()) %>% 
-    mutate(value = factor(value, levels = c(1,0), labels = c("Low", "High"))) %>% 
-    ggplot(aes(x = value, y = n)) +
-    geom_col(fill = colors[color_nr]) +
-    labs(title = "Predicted Values for COMPAS Score",
-         subtitle = paste0("Absolute Frequency of Predicted Score Values for ", plot_text),
-         x = "COMPAS Score",
-         y = "Predicted Frequency") 
-  
-  ## Plots for comparison of model predictions and base model predictions
-  plot_comp_logit = NULL
-  plot_comp_bin = NULL
-  
-  # Plot for comparison of predicted logits in model and base model
-  if(!is.null(plot_org_logit)){
-    plot_comp_logit = plot_org_logit +
-      geom_histogram(data = counter_pred_logit %>% as_tibble() %>% rename(logit = value) ,
-                 aes(x = logit, y = after_stat(density)), 
-                 bins = 30, 
-                 fill = colors[color_nr],
-                 alpha = 0.3) +
-      geom_density(data = counter_pred_logit %>% as_tibble() %>% rename(logit = value), 
-                   aes(x = logit),
-                   linewidth = 1,
-                   color = colors[color_nr]) +
-      labs(title = "Comparison of Predicted Values for Probabilites of a Low COMPAS Score",
-           subtitle = paste0("Histogram and Density Function for Original Data & Intervention Data"),
-           x = "Predicted Probability of a Low COMPAS Score",
-           y = "Density") 
-  }
-  
-  # Plot for comparison of predicted COMPAS scores in model and base model
-  if(!is.null(plot_org_bin)){
-    
-    counter_pred_plot = counter_pred %>% 
-      as_tibble() %>% 
-      group_by(value) %>% 
-      summarise(n = n()) %>% 
-      mutate(Data = factor(plot_text_bin)) %>% 
-      mutate(value = factor(value, levels = c(1,0), labels = c("Low", "High")))
-    
-    if(ncol(plot_org_bin$data) == 2){
-       plot_comp_bin = plot_org_bin$data %>% 
-        mutate(Data = factor("Original")) %>% 
-        rbind(counter_pred_plot) %>% 
-        group_by(Data) %>% 
-        ggplot(aes(x = value, y = n, fill = Data)) +
-        geom_col(position = position_dodge(0.82), width = 0.8) +
-        labs(title = "Comparison of Predicted Values for COMPAS Score",
-             subtitle = paste0("Frequency of Predicted Score Values for Original Data & ", plot_text),
-             x = "COMPAS Score",
-             y = "Predicted Frequency") +
-        scale_fill_manual(values = c(colors[2], colors[color_nr]))
-    } else {
-      plot_comp_bin = plot_org_bin$data %>% 
-        rbind(counter_pred_plot) %>% 
-        group_by(Data) %>% 
-        ggplot(aes(x = value, y = n, fill = Data)) +
-        geom_col(position = position_dodge(0.82), width = 0.8) +
-        labs(title = "Comparison of Predicted Values for COMPAS Score",
-             subtitle = paste0("Frequency of Predicted Score Values for Original Data & Intervention Data"),
-             x = "COMPAS Score",
-             y = "Predicted Frequency") +
-        scale_fill_manual(values = c(as.vector(unique(ggplot_build(plot_org_bin)$data[[1]]["fill"])[["fill"]]),
-                                     colors[color_nr]))
-    }
-  }
-  
-  # Output list
-  output = list(counter_pred_logit = counter_pred_logit,
-                counter_pred = counter_pred,
-                accuracy = accuracy,
-                plot_compas_weights = plot_compas_weights,
-                plot_compas_weights_age = plot_compas_weights_age,
-                weight_table = weight_table,
-                plot_counter_logit = plot_counter_logit,
-                plot_counter_bin = plot_counter_bin,
-                plot_comp_logit = plot_comp_logit,
-                plot_comp_bin = plot_comp_bin
-                )
-  
-  return(output)
-}
-```
-
-
 #### Base model with estiamted U_d and U_j
-
 ```{r}
 data_base = data_counter
+```
 
+```{r}
 model_base = model_counter(data = data_base,
                            u_d = u_d, 
                            u_j = u_j, 
@@ -689,30 +305,10 @@ pred_base = prediction_counter(params_df = model_base$params,
                                data = data_base, 
                                seed = 32458973,
                                color_nr = 2, 
-                               plot_text = "Original Data", 
+                               plot_text = "originale Daten", 
                                plot_text_bin = "Original", 
                                plot_org_logit = NULL, 
                                plot_org_bin = NULL)
-```
-
-```{r}
-saveRDS(model_base, 
-        file = here("01_data", "02_data_processed", "04_counterfactual",
-                    "03_model_base.rds")
-        )
-
-saveRDS(pred_base, 
-        file = here("01_data", "02_data_processed", "04_counterfactual", 
-                    "04_pred_base.rds")
-        )
-
-model_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
-                                 "03_model_base.rds")
-                    )
-
-pred_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual",
-                                "04_pred_base.rds")
-                   )
 ```
 
 #### Interventions
@@ -737,42 +333,12 @@ pred_sex = prediction_counter(params_df = model_sex$params,
                               color_nr = 3,
                               ymin_age_weight = -1,
                               ymax_age_weight = 1,
-                              plot_text = "Intervention on Sex", 
-                              plot_text_bin = "male <-> female", 
+                              plot_text = "Intervention bei Geschlecht", 
+                              plot_text_bin = "Männlich \u2194 Weiblich", 
                               plot_org_logit = pred_base$plot_counter_logit, 
                               plot_org_bin = pred_base$plot_counter_bin)
 ```
 
-```{r}
-saveRDS(model_sex, 
-        file = here("01_data", "02_data_processed", "04_counterfactual", 
-                    "05_model_sex.rds")
-        )
-
-saveRDS(pred_sex, 
-        file = here("01_data", "02_data_processed", "04_counterfactual", 
-                    "06_pred_sex.rds")
-        )
-
-model_sex = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
-                                "05_model_sex.rds")
-                  )
-
-pred_sex = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
-                               "06_pred_sex.rds")
-                  )
-```
-
-
-???
-```{r}
-bin_colors = unique(ggplot_build(pred_sex$plot_comp_bin)$data[[1]]["fill"])
-
-sex_comp_logit = pred_sex$plot_comp_logit +
-                    geom_label(x = 0.55, y = 1.25, label = "Original", color = bin_colors[1,1]) +
-                    geom_label(x = 0.2, y = 1.2, label = "Counterfactual", color = bin_colors[2,1]) 
-  
-```
 
 ##### Intervention on Race: Whites are Blacks, Blacks are Whites now, the other races stay the same
 
@@ -798,32 +364,12 @@ pred_race_wb = prediction_counter(params_df = model_race_wb$params,
                                   data = data_race_wb, 
                                   color_nr = 1, 
                                   seed = 49586783,
-                                  plot_text = "Intervention on Race White <-> Black", 
-                                  plot_text_bin = "white <-> black", 
+                                  plot_text = "Intervention bei Race: Weiß \u2194 Schwarz", 
+                                  plot_text_bin = "Weiß \u2194 Schwarz", 
                                   plot_org_logit = pred_base$plot_counter_logit, 
                                   plot_org_bin = pred_base$plot_counter_bin)
 ```
 
-
-```{r}
-saveRDS(model_race_wb, 
-        file = here("01_data", "02_data_processed", "04_counterfactual", 
-                    "07_model_race_wb.rds")
-        )
-
-saveRDS(pred_race_wb, 
-        file = here("01_data", "02_data_processed", "04_counterfactual", 
-                    "08_pred_race_wb.rds")
-        )
-
-model_race_wb = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
-                                    "07_model_race_wb.rds")
-                       )
-
-pred_race_wb = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
-                                   "08_pred_race_wb.rds")
-                      )
-```
 
 ##### Intervention on Race: Whites are Hispanics, Hispanics are Whites now, the other races stay the same
 
@@ -848,33 +394,12 @@ model_race_wh = model_counter(data = data_race_wh,
 
 pred_race_wh = prediction_counter(params_df = model_race_wh$params, 
                                   data = data_race_wh, 
-                                  color_nr = 1, 
+                                  color_nr = 4, 
                                   seed = 28975065,
-                                  plot_text = "Intervention on Race White <-> Hispanic", 
-                                  plot_text_bin = "white <-> hispanic", 
+                                  plot_text = "Intervention bei Race: Weiß \u2194 Hispanisch", 
+                                  plot_text_bin = "Weiß \u2194 Hispanisch", 
                                   plot_org_logit = pred_base$plot_counter_logit, 
                                   plot_org_bin = pred_base$plot_counter_bin)
-```
-
-
-```{r}
-saveRDS(model_race_wh, 
-        file = here("01_data", "02_data_processed", "04_counterfactual", 
-                    "09_model_race_wh.rds")
-        )
-
-saveRDS(pred_race_wh, 
-        file = here("01_data", "02_data_processed", "04_counterfactual", 
-                    "10_pred_race_wh.rds")
-        )
-
-model_race_wh = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
-                                    "09_model_race_wh.rds")
-                       )
-
-pred_race_wh = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
-                                   "10_pred_race_wh.rds")
-                      )
 ```
 
 
@@ -901,16 +426,56 @@ model_race_wo = model_counter(data = data_race_wo,
 
 pred_race_wo = prediction_counter(params_df = model_race_wo$params, 
                                   data = data_race_wo, 
-                                  color_nr = 1, 
+                                  color_nr = 5, 
                                   seed = 455927483,
-                                  plot_text = "Intervention on Race White <-> Others", 
-                                  plot_text_bin = "white <-> others", 
+                                  plot_text = "Intervention bei Race: Weiß \u2194 Andere", 
+                                  plot_text_bin = "Weiß \u2194 Andere", 
                                   plot_org_logit = pred_base$plot_counter_logit, 
                                   plot_org_bin = pred_base$plot_counter_bin)
 ```
 
-
+### Save Models
 ```{r}
+saveRDS(model_base, 
+        file = here("01_data", "02_data_processed", "04_counterfactual",
+                    "03_model_base.rds")
+        )
+
+saveRDS(pred_base, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", 
+                    "04_pred_base.rds")
+        )
+
+saveRDS(model_sex, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", 
+                    "05_model_sex.rds")
+        )
+
+saveRDS(pred_sex, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", 
+                    "06_pred_sex.rds")
+        )
+
+saveRDS(model_race_wb, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", 
+                    "07_model_race_wb.rds")
+        )
+
+saveRDS(pred_race_wb, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", 
+                    "08_pred_race_wb.rds")
+        )
+
+saveRDS(model_race_wh, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", 
+                    "09_model_race_wh.rds")
+        )
+
+saveRDS(pred_race_wh, 
+        file = here("01_data", "02_data_processed", "04_counterfactual", 
+                    "10_pred_race_wh.rds")
+        )
+
 saveRDS(model_race_wo, 
         file = here("01_data", "02_data_processed", "04_counterfactual", 
                     "11_model_race_wo.rds")
@@ -920,6 +485,76 @@ saveRDS(pred_race_wo,
         file = here("01_data", "02_data_processed", "04_counterfactual", 
                     "12_pred_race_wo.rds")
         )
+```
+
+
+### Reload Data & Models
+```{r}
+data_base = data_counter
+
+data_sex = data_counter %>% 
+  mutate(Sex_Male = ifelse(Sex_Male == 1, 0, 1),
+         Sex_Female = ifelse(Sex_Female == 1, 0, 1))
+
+data_race_wb = data_counter %>% 
+  mutate(Race_Caucasian_new = ifelse(Race_African_American == 1, 1, 0),
+         Race_African_American_new = ifelse(Race_Caucasian == 1, 1, 0)) %>% 
+  select(!c(Race_Caucasian, Race_African_American)) %>% 
+  rename(Race_Caucasian = Race_Caucasian_new,
+         Race_African_American = Race_African_American_new) %>% 
+  relocate(c(Race_Caucasian, Race_African_American), .before = Race_Hispanic)
+
+data_race_wh = data_counter %>% 
+  mutate(Race_Caucasian_new = ifelse(Race_Hispanic == 1, 1, 0),
+         Race_Hispanic_new = ifelse(Race_Caucasian == 1, 1, 0)) %>% 
+  select(!c(Race_Caucasian, Race_Hispanic)) %>% 
+  rename(Race_Caucasian = Race_Caucasian_new,
+         Race_Hispanic = Race_Hispanic_new) %>% 
+  relocate(Race_Caucasian, .before = Race_African_American) %>% 
+  relocate(Race_Hispanic, .after = Race_African_American) 
+
+data_race_wo = data_counter %>% 
+  mutate(Race_Caucasian_new = ifelse(Race_Other == 1, 1, 0),
+         Race_Other_new = ifelse(Race_Caucasian == 1, 1, 0)) %>% 
+  select(!c(Race_Caucasian, Race_Other)) %>% 
+  rename(Race_Caucasian = Race_Caucasian_new,
+         Race_Other = Race_Other_new) %>% 
+  relocate(Race_Caucasian, .before = Race_African_American) %>% 
+  relocate(Race_Other, .after = Race_Hispanic) 
+```
+
+```{r}
+model_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                                 "03_model_base.rds")
+                    )
+
+pred_base = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual",
+                                "04_pred_base.rds")
+                   )
+
+model_sex = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                                "05_model_sex.rds")
+                  )
+
+pred_sex = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                               "06_pred_sex.rds")
+                  )
+
+model_race_wb = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                                    "07_model_race_wb.rds")
+                       )
+
+pred_race_wb = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                                   "08_pred_race_wb.rds")
+                      )
+
+model_race_wh = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                                    "09_model_race_wh.rds")
+                       )
+
+pred_race_wh = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
+                                   "10_pred_race_wh.rds")
+                      )
 
 model_race_wo = readRDS(file = here("01_data", "02_data_processed", "04_counterfactual", 
                                     "11_model_race_wo.rds")
@@ -930,73 +565,265 @@ pred_race_wo = readRDS(file = here("01_data", "02_data_processed", "04_counterfa
                       )
 ```
 
+### Comparison plots
+#### Logits
+```{r}
+# Colors
+bin_colors_sex = unique(ggplot_build(pred_sex$plot_comp_bin)$data[[1]]["fill"])
+
+bin_colors_race_wb = unique(ggplot_build(pred_race_wb$plot_comp_bin)$data[[1]]["fill"])
+
+bin_colors_race_wh = unique(ggplot_build(pred_race_wh$plot_comp_bin)$data[[1]]["fill"])
+
+bin_colors_race_wo = unique(ggplot_build(pred_race_wo$plot_comp_bin)$data[[1]]["fill"])
+
+# Sex
+plot_sex_logit = pred_sex$plot_comp_logit +
+   geom_label(x = 0.55, y = 1.25, label = "Original", color = bin_colors_sex[1,1]) +
+   geom_label(x = 0.2, y = 1.2, label = "Kontrafaktisch", color = bin_colors_sex[2,1]) 
+
+# Race
+plot_race_wb_logit = pred_race_wb$plot_comp_logit +
+   geom_label(x = 0.55, y = 1.25, label = "Original", color = bin_colors_race_wb[1,1]) +
+   geom_label(x = 0.2, y = 1.15, label = "Kontrafaktisch", color = bin_colors_race_wb[2,1]) 
+
+plot_race_wh_logit = pred_race_wh$plot_comp_logit +
+   geom_label(x = 0.55, y = 1.3, label = "Original", color = bin_colors_race_wh[1,1]) +
+   geom_label(x = 0.1, y = 1.1, label = "Kontrafaktisch", color = bin_colors_race_wh[2,1]) 
+
+plot_race_wo_logit = pred_race_wo$plot_comp_logit +
+   geom_label(x = 0.55, y = 1.23, label = "Original", color = bin_colors_race_wo[1,1]) +
+   geom_label(x = 0.15, y = 1.1, label = "Kontrafaktisch", color = bin_colors_race_wo[2,1]) 
+```
+
+
+#### Binary Outcomes
+```{r}
+plot_sex_bin = pred_sex$plot_comp_bin
+
+pred_race_bin = pred_race_wb
+
+pred_race_bin = prediction_counter(params_df = model_race_wh$params, 
+                                  data = data_race_wh, 
+                                  color_nr = 4, 
+                                  seed = 28975065,
+                                  plot_text = "Intervention bei Race: Weiß \u2194 Hispanisch", 
+                                  plot_text_bin = "Weiß \u2194 Hispanisch", 
+                                  plot_org_logit = pred_race_bin$plot_comp_logit, 
+                                  plot_org_bin = pred_race_bin$plot_comp_bin)
+
+pred_race_bin = prediction_counter(params_df = model_race_wo$params, 
+                                  data = data_race_wo, 
+                                  color_nr = 5, 
+                                  seed = 455927483,
+                                  plot_text = "Intervention bei Race: Weiß \u2194 Andere", 
+                                  plot_text_bin = "Weiß \u2194 Andere",
+                                  plot_org_logit = pred_race_bin$plot_comp_logit, 
+                                  plot_org_bin = pred_race_bin$plot_comp_bin)
+
+plot_race_bin = pred_race_bin$plot_comp_bin
+```
+
+
 ### Weight comparison
 ```{r}
 # Sex
-pred_base$weight_table %>% 
-  select(starts_with("compas_Sex"))
+weights_sex_base = pred_base$weight_table %>% 
+  select(starts_with("compas_Sex")) %>% 
+  rename(Original_Männlich = "compas_Sex: Male",
+         Original_Weiblich = "compas_Sex: Female") %>% 
+  pivot_longer(cols = everything(),
+               names_to = c("Modell", "Geschlecht"),
+               names_sep = "_") %>% 
+  mutate(value_type = c("median", "median", "mad", "mad"))
 
-pred_sex$weight_table %>% 
-  select(starts_with("compas_Sex"))
+weights_sex_counter = pred_sex$weight_table %>% 
+  select(starts_with("compas_Sex")) %>% 
+  rename("Männlich \u2194 Weiblich_Männlich" = "compas_Sex: Male",
+         "Männlich \u2194 Weiblich_Weiblich" = "compas_Sex: Female") %>% 
+  pivot_longer(cols = everything(),
+               names_to = c("Modell", "Geschlecht"),
+               names_sep = "_") %>% 
+  mutate(value_type = c("median", "median", "mad", "mad"))
+
+plot_weights_sex = rbind(weights_sex_base, weights_sex_counter) %>% 
+  pivot_wider(names_from = "value_type",
+              values_from = "value") %>% 
+  mutate(ymin = median - (1/2)*mad,
+         ymax = median + (1/2)*mad) %>% 
+  ggplot(aes(x = Geschlecht, y = median, color = Geschlecht)) +
+  geom_abline(intercept = 0, slope = 0, linewidth = 0.2) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(x = Geschlecht, ymin = ymin, ymax = ymax), width = 0.3) +
+  facet_wrap(~ Modell, dir = "v") +
+  labs(y =  "Median \u00b1 MAD") +
+  guides(color = "none") +
+  scale_color_manual(values = wes_palette("Zissou1")[2:3]) +
+  coord_flip()
 
 # Race
-pred_base$weight_table %>% 
-  select(starts_with("compas_Race"))
+weights_race_base = pred_base$weight_table %>% 
+  select(starts_with("compas_Race")) %>% 
+  rename(Original_Weiß = "compas_Race: Caucasian",
+         Original_Schwarz = "compas_Race: African-American",
+         Original_Hispanisch = "compas_Race: Hispanic",
+         Original_Andere = "compas_Race: Other") %>% 
+  pivot_longer(cols = everything(),
+               names_to = c("Modell", "Race"),
+               names_sep = "_") %>% 
+  mutate(value_type = c("median", "median", "median", "median", 
+                        "mad", "mad", "mad", "mad"))
 
-pred_race_wb$weight_table %>% 
-  select(starts_with("compas_Race"))
-pred_race_wh$weight_table %>% 
-  select(starts_with("compas_Race"))
-pred_race_wo$weight_table %>% 
-  select(starts_with("compas_Race"))
+weights_race_wb = pred_race_wb$weight_table %>% 
+  select(starts_with("compas_Race")) %>% 
+  rename("Weiß \u2194 Schwarz_Weiß" = "compas_Race: Caucasian",
+         "Weiß \u2194 Schwarz_Schwarz" = "compas_Race: African-American",
+         "Weiß \u2194 Schwarz_Hispanisch" = "compas_Race: Hispanic",
+         "Weiß \u2194 Schwarz_Andere" = "compas_Race: Other") %>% 
+  pivot_longer(cols = everything(),
+               names_to = c("Modell", "Race"),
+               names_sep = "_") %>% 
+  mutate(value_type = c("median", "median", "median", "median", 
+                        "mad", "mad", "mad", "mad"))
+
+weights_race_wh = pred_race_wh$weight_table %>% 
+  select(starts_with("compas_Race")) %>% 
+  rename("Weiß \u2194 Hispanisch_Weiß" = "compas_Race: Caucasian",
+         "Weiß \u2194 Hispanisch_Schwarz" = "compas_Race: African-American",
+         "Weiß \u2194 Hispanisch_Hispanisch" = "compas_Race: Hispanic",
+         "Weiß \u2194 Hispanisch_Andere" = "compas_Race: Other") %>% 
+  pivot_longer(cols = everything(),
+               names_to = c("Modell", "Race"),
+               names_sep = "_") %>% 
+  mutate(value_type = c("median", "median", "median", "median", 
+                        "mad", "mad", "mad", "mad"))
+
+weights_race_wo = pred_race_wo$weight_table %>% 
+  select(starts_with("compas_Race")) %>% 
+  rename("Weiß \u2194 Andere_Weiß" = "compas_Race: Caucasian",
+         "Weiß \u2194 Andere_Schwarz" = "compas_Race: African-American",
+         "Weiß \u2194 Andere_Hispanisch" = "compas_Race: Hispanic",
+         "Weiß \u2194 Andere_Andere" = "compas_Race: Other") %>% 
+  pivot_longer(cols = everything(),
+               names_to = c("Modell", "Race"),
+               names_sep = "_") %>% 
+  mutate(value_type = c("median", "median", "median", "median", 
+                        "mad", "mad", "mad", "mad"))
+
+plot_weights_race = rbind(weights_race_base, 
+                          weights_race_wb,
+                          weights_race_wh,
+                          weights_race_wo) %>% 
+  pivot_wider(names_from = "value_type",
+              values_from = "value") %>% 
+  mutate(ymin = median - (1/2)*mad,
+         ymax = median + (1/2)*mad) %>% 
+  ggplot(aes(x = Race, y = median, color = Race)) +
+  geom_abline(intercept = 0, slope = 0, linewidth = 0.2) +
+  geom_point(size = 0.8) +
+  geom_errorbar(aes(x = Race, ymin = ymin, ymax = ymax), width = 0.8, linewidth = 0.3) +
+  facet_wrap(~ Modell, nrow = 4, ncol = 1) +
+  labs(y =  "Median \u00b1 MAD") +
+  guides(color = "none") +
+  scale_color_manual(values = wes_palette("Zissou1")[2:5]) +
+  coord_flip()
+
+plot_weights_race
 ```
 
-```{r}
-pred_sex$plot_comp_logit
-pred_sex$plot_comp_bin
-
-pred_race_wb$plot_comp_logit
-pred_race_wb$plot_comp_bin
-
-pred_race_wh$plot_comp_logit
-pred_race_wh$plot_comp_bin
-
-pred_race_wo$plot_comp_logit
-pred_race_wo$plot_comp_bin
-```
 ### Save graphs
 ```{r}
+ggsave("02_plot_sex_logit.png",
+       plot = plot_sex_logit,
+       device = "png",
+       path = here("03_outputs", "04_counterfactual"),
+       dpi = 300,
+       width = 20,
+       height = 12,
+       units = c("cm")
+       )
 
+ggsave("03_plot_race_wb_logit.png",
+       plot = plot_race_wb_logit,
+       device = "png",
+       path = here("03_outputs", "04_counterfactual"),
+       dpi = 300,
+       width = 20,
+       height = 12,
+       units = c("cm")
+       )
+
+ggsave("04_plot_race_wh_logit.png",
+       plot = plot_race_wh_logit,
+       device = "png",
+       path = here("03_outputs", "04_counterfactual"),
+       dpi = 300,
+       width = 20,
+       height = 12,
+       units = c("cm")
+       )
+
+ggsave("05_plot_race_wo_logit.png",
+       plot = plot_race_wo_logit,
+       device = "png",
+       path = here("03_outputs", "04_counterfactual"),
+       dpi = 300,
+       width = 20,
+       height = 12,
+       units = c("cm")
+       )
+
+ggsave("06_plot_sex_bin.png",
+       plot = plot_sex_bin,
+       device = "png",
+       path = here("03_outputs", "04_counterfactual"),
+       dpi = 300,
+       width = 20,
+       height = 12,
+       units = c("cm")
+       )
+
+ggsave("07_plot_race_bin.png",
+       plot = plot_race_bin,
+       device = "png",
+       path = here("03_outputs", "04_counterfactual"),
+       dpi = 300,
+       width = 20,
+       height = 12,
+       units = c("cm")
+       )
+
+ggsave("08_plot_weights_sex.png",
+       plot = plot_weights_sex,
+       device = "png",
+       path = here("03_outputs", "04_counterfactual"),
+       dpi = 300,
+       width = 20,
+       height = 12,
+       units = c("cm")
+       )
+
+ggsave("09_plot_weights_race.png",
+       plot = plot_weights_race,
+       device = "png",
+       path = here("03_outputs", "04_counterfactual"),
+       dpi = 300,
+       width = 20,
+       height = 12,
+       units = c("cm")
+       )
 ```
-
 
 ### Epsilon-delta-approximate counterfactual fairness
-#### Function for approximate counterfactual fairness
-```{r}
-approx_counterfairness = function(base_outcome = pred_base$counter_pred,
-                                  counter_outcome,
-                                  epsilon = 0.1){
-  
-  diff = abs(base_outcome-counter_outcome)
-  
-  p = diff < epsilon
-  
-  delta = 1 - sum(p)/length(p)
-  
-  return(delta)
-}
-```
-
-
-
 #### Sex
 ```{r}
 delta_sex = approx_counterfairness(base_outcome = pred_base$counter_pred,
                                    counter_outcome = pred_sex$counter_pred,
                                    epsilon = 0.1)
 
-1-delta_sex
+delta_sex
 ```
+
 #### Race
 ```{r}
 delta_wb = approx_counterfairness(base_outcome = pred_base$counter_pred,
@@ -1012,125 +839,12 @@ delta_wo = approx_counterfairness(base_outcome = pred_base$counter_pred,
                                   epsilon = 0.1)
 
 delta_race = max(delta_wb, delta_wh, delta_wo)
-1-delta_race
+delta_race
 ```
 
 ## Post-Processing: ROC-Pivot
-Function for theta calculation
-```{r}
-normal_function = function(logit){
-  output = ifelse(logit >= 0.5, 1, 0)
-  return(output)
-}
-
-rejected_function = function(data, privileged){
-  
-  d = data %>% 
-    select(all_of(privileged))
-  
-  output = ifelse(d == 1, 0, 1)
-  
-  return(output)
-}
-
-delta_calc = function(theta,
-                      epsilon = 0.1,
-                      data_base = data_base,
-                      logit_base,
-                      data_counter, 
-                      logit_counter, 
-                      prot, 
-                      priv){
-  
-  upper = 0.5 + theta
-  lower = 0.5 - theta
-  
-  d_base = data_base %>% 
-    mutate(logit = logit_base) %>% 
-    select(starts_with(prot),
-           logit)
-  
-  d_base_outcome = d_base %>% 
-    mutate(outcome = ifelse((logit < lower | logit > upper),
-                    normal_function(logit),
-                    rejected_function(data = ., privileged = priv))
-           ) 
-  
-
-  deltas = c()
-  
-  for (i in 1:length(data_counter)) {
-    d_counter = data_counter[[i]] %>% 
-      mutate(logit = logit_counter[[i]]) %>% 
-      select(starts_with(prot),
-             logit)
-    
-    # d_counter_outcome = d_counter %>%
-    #   mutate(outcome = ifelse((logit < lower | logit > upper),
-    #                   normal_function(logit),
-    #                   rejected_function(data = ., privileged = priv))
-    #          )
-    
-    d_counter_outcome = d_counter %>%
-      mutate(outcome = normal_function(logit))
-    
-    deltas[i] = approx_counterfairness(base_outcome = d_base_outcome$outcome,
-                                       counter_outcome = d_counter_outcome$outcome,
-                                       epsilon = epsilon)
-  }
-  
-  delta = max(deltas)
-  
-  return(delta)
-}
-
-theta_calc = function(theta_lower = 0,
-                      theta_upper = 0.05,
-                      step = 0.01,
-                      epsilon = 0.1,
-                      data_base = data_base,
-                      logit_base,
-                      data_counter, 
-                      logit_counter, 
-                      prot, 
-                      priv){
-  
-  grid = seq(theta_lower, theta_upper, step)
-  
-  df = data.frame(theta = grid,
-                  delta = NA)
-
-  for(i in 1:length(grid)){
-    df$delta[i] = delta_calc(theta = df$theta[i],
-                             epsilon = epsilon,
-                             data_base = data_base,
-                             logit_base = logit_base,
-                             data_counter = data_counter, 
-                             logit_counter = logit_counter, 
-                             prot = prot, 
-                             priv = priv)
-  }
-  
-  output = df %>% 
-    filter(delta == min(delta)) %>% 
-    as.list()
-  
-  return(output)
-}
-
-```
-
 ### Calculate theta for Sex
 ```{r}
-delta_calc(theta = 0.02,
-           epsilon = 0.1,
-           data_base = data_base,
-           logit_base = pred_base$counter_pred_logit,
-           data_counter = list(data_sex),
-           logit_counter = list(pred_sex$counter_pred_logit),
-           prot = "Sex",
-           priv = "Sex_Male") 
-
 theta_sex = theta_calc(theta_lower = 0,
                        theta_upper = 0.05,
                        step = 0.001,
@@ -1141,24 +855,13 @@ theta_sex = theta_calc(theta_lower = 0,
                        logit_counter = list(pred_sex$counter_pred_logit),
                        prot = "Sex",
                        priv = "Sex_Male")
+
+theta_sex
 ```
 
 
 ### Calculate theta for Race
 ```{r}
-delta_calc(theta = 0.02,
-           epsilon = 0.1,
-           data_base = data_base,
-           logit_base = pred_base$counter_pred_logit,
-           data_counter = list(data_race_wb, 
-                               data_race_wh, 
-                               data_race_wo),
-           logit_counter = list(pred_race_wb$counter_pred_logit,
-                                pred_race_wh$counter_pred_logit,
-                                pred_race_wo$counter_pred_logit),
-           prot = "Race",
-           priv = "Race_Caucasian") 
-
 theta_race = theta_calc(theta_lower = 0,
                         theta_upper = 0.005,
                         step = 0.0001,
@@ -1173,5 +876,7 @@ theta_race = theta_calc(theta_lower = 0,
                                              pred_race_wo$counter_pred_logit),
                         prot = "Race",
                         priv = "Race_Caucasian")
+
+theta_race
 ```
 

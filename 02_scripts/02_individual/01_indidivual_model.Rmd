@@ -225,8 +225,8 @@ saveRDS(model_base,
 saveRDS(dist_base,
         file = here("01_data", "02_data_processed", "02_individual", "big_data",
                     "01_dist_base.rds"))
-
-
+```
+```{r}
 model_base = readRDS(file = here("01_data", "02_data_processed", "02_individual", 
                                  "01_model_base.rds"))
 
@@ -287,7 +287,7 @@ my_method_with_penalty <- function(x, y,
   beta = rep(0, ncol(x))
   
   # Set the maximum number of iterations to 100
-  max_iter = 100 
+  max_iter = 10 ##########!!!!!!!!!!!!!!!!!
   
   # Set the convergence threshold to 1e-6
   tol = 1e-6
@@ -346,13 +346,11 @@ my_method_with_penalty <- function(x, y,
 
 ### Hyper-Parameter Tuning (lambda)
 ```{r}
-lambdas = c(1, 10, 100)
+lambdas = seq(-150, 0, 75)
 
 results_fair = c()
 
 results_acc = c()
-
-lambda = 10
 
 for (lambda in lambdas) {
   print(paste("Lambda:", lambda))
@@ -376,14 +374,26 @@ for (lambda in lambdas) {
   dist_linf_pen = diff_dist(prob = pen_prob, 
                             data = data)
   
-  logloss = LogLoss(base_prob$low, data_prep$compas)
+  logloss = LogLoss(pen_prob$low, data_prep$compas)
   
   results_fair = append(results_fair, values = dist_linf_pen$n_unfair_rel)
   results_acc = append(results_acc, values = logloss)
 }
-lambda = c(1,)
-results_fair = c(0.1632184, 0.3308836, 0.1712977)
-results_acc = c(2.157753,2.157753, 2.157753)
+
+lambdas
+results_fair
+results_acc
+
+hyperparam_results = data.frame(lambda = lamdas,
+                                fairness = results_fair,
+                                logloss = results_acc)
+
+hyperparam_results
+
+lambda = c(1,10, 100, -1, -10, -100)
+results_fair = c(0.1657097, 0.1769129, 0.3311039,  0.1631485, 0.1513733, 0.09468478)
+results_acc = c(2.157076, 2.153654, 2.094676, 2.157982, 2.163087, 2.589211)
+
 ```
 
 ### Final fair model
@@ -430,13 +440,13 @@ saveRDS(model_fair,
 saveRDS(dist_pen,
         file = here("01_data", "02_data_processed", "02_individual", "big_data",
                     "02_dist_pen.rds"))
+```
 
-
+```{r}
 model_fair = readRDS(file = here("01_data", "02_data_processed", "02_individual", 
                                  "02_model_fair.rds"))
 
 dist_pen = readRDS(file = here("01_data", "02_data_processed", "02_individual", "big_data",
                                     "02_dist_pen.rds"))
-
 ```
 

@@ -17,11 +17,12 @@ pacman::p_load(devtools,
                tidyverse, 
                here,
                tidymodels,
-               DALEXtra)
+               DALEXtra,
+               fairmodels)
 
-if(!require(fairmodels)) install_github("s-schrauth/fairmodels")
-
-library(fairmodels)
+# if(!require(fairmodels)) install_github("s-schrauth/fairmodels")
+# 
+# library(fairmodels)
 
 tidymodels_prefer()
 ```
@@ -36,38 +37,240 @@ model_fit = readRDS(file = here("01_data", "02_data_processed", "01_base_model",
 ```
 
 ## Group Fairness
-###
+### Basic model explanation
 ```{r}
+data_group = data %>% 
+  mutate(sex = factor(ifelse(sex == "Male", "Männlich", "Weiblich")),
+         race = factor(case_when(
+                  race == "Caucasian" ~ "Weiß",
+                  race == "African-American" ~ "Schwarz",
+                  race == "Hispanic" ~ "Hispanisch",
+                  race == "Other" ~ "Andere"
+                                )
+                      )
+         )
+
+recipe = recipe(compas ~ .,
+                data = data_group) %>% 
+  step_dummy(all_nominal_predictors())
+
+model = logistic_reg() %>% 
+  set_engine("glm") %>% 
+  set_mode("classification")
+
+workflow = workflow() %>% 
+  add_model(model) %>% 
+  add_recipe(recipe)
+
+model_fit = 
+  workflow %>% 
+  fit(data = data_group)
+
 y = model_fit$pre$mold$outcomes %>% 
   as.vector() %>% 
   unlist(use.names = FALSE) %>% 
   as.numeric()
 
 model_base_explainer = explain_tidymodels(model = model_fit,
-                                          data = data,
+                                          data = data_group,
                                           y = y-1,
-                                          label = "Base Model")
+                                          label = "Basis-Model")
+```
 
+### Group Fairness for Sex
+```{r}
 base_fairobj_sex = fairness_check(model_base_explainer,
-                                  protected  = data$sex,
-                                  privileged = "Male")
+                                  protected  = data_group$sex,
+                                  privileged = "Männlich")
 
-base_fairobj_race = fairness_check(model_base_explainer,
-                                   protected  = data$race,
-                                   privileged = "Caucasian")
-
-plot(base_fairobj_sex, fairness_metrics = c("STP", "FPR", "FNR")) +
-  guides(fill = "none")
-
-plot(base_fairobj_race, fairness_metrics = c("STP", "FPR", "FNR")) +
+plot(base_fairobj_sex, fairness_metrics = c("STP", "TPR", "PPV")) +
+  facet_wrap(~ factor(metric, levels = c("Statistical parity ratio   (TP + FP)/(TP + FP + TN + FN)",
+                                         "Equal opportunity ratio     TP/(TP + FN)",
+                                         "Predictive parity ratio     TP/(TP + FP)"),
+                      labels = c("Statistical Parity",
+                                 "Equal Opportunity",
+                                 "Predictive Parity")
+                      ), ncol = 1) +
+  labs(title = "Gruppen-Fairness in Bezug auf Geschlecht",
+       subtitle = "für Basis-Modell",
+       y = "Verhältnis weiblich/männlich",
+       x = "") +
+  theme(axis.text.y = element_blank()) +
   guides(fill = "none")
 
 plot(group_metric(base_fairobj_sex, fairness_metric = "STP"))
-plot(group_metric(base_fairobj_race, fairness_metric = "STP"))
+plot(group_metric(base_fairobj_sex, fairness_metric = "TPR"))
+plot(group_metric(base_fairobj_sex, fairness_metric = "PPV"))
 
-plot(fairness_radar(base_fairobj_sex, fairness_metrics = c("STP", "FPR", "FNR")))
-plot(fairness_radar(base_fairobj_race, fairness_metrics = c("STP", "FPR", "FNR")))
+plot_density(base_fairobj_sex)
+```
+
+### Group Fairness for Race
+```{r}
+base_fairobj_race = fairness_check(model_base_explainer,
+                                   protected  = data_group$race,
+                                   privileged = "Weiß")
+
+plot(base_fairobj_race, fairness_metrics = c("STP", "TPR", "PPV")) +
+  facet_wrap(~ factor(metric, levels = c("Statistical parity ratio   (TP + FP)/(TP + FP + TN + FN)",
+                                         "Equal opportunity ratio     TP/(TP + FN)",
+                                         "Predictive parity ratio     TP/(TP + FP)"),
+                      labels = c("Statistical Parity",
+                                 "Equal Opportunity",
+                                 "Predictive Parity")
+                      ), ncol = 1) +
+  labs(title = "Gruppen-Fairness in Bezug auf Race",
+       subtitle = "für Basis-Modell",
+       y = "Verhältnis unprivilegierte Race-Gruppe/Weiß",
+       x = "unprivilegierte Race-Gruppe") +
+  guides(fill = "none")
+
+plot(group_metric(base_fairobj_race, fairness_metric = "STP"))
+plot(group_metric(base_fairobj_race, fairness_metric = "TPR"))
+plot(group_metric(base_fairobj_race, fairness_metric = "PPV"))
 
 plot_density(base_fairobj_race)
 ```
+
+## Pre-Processing
+### Reweighing for Sex
+```{r}
+weights_sex = reweight(protected = data_group$sex,
+                       y = as.numeric(data_group$compas)-1)
+
+data_sex = data_group %>% 
+  mutate(weights = importance_weights(weights_sex))
+
+recipe_sex = recipe(compas ~ .,
+                    data = data_sex) %>% 
+  step_dummy(all_nominal_predictors())
+
+model_sex = logistic_reg() %>% 
+  set_engine("glm") %>% 
+  set_mode("classification")
+
+workflow_sex = workflow() %>% 
+  add_model(model_sex) %>% 
+  add_recipe(recipe_sex) %>% 
+  add_case_weights(weights)
+
+model_fit_sex = workflow_sex %>% 
+  fit(data = data_sex)
+
+estimation_sex = tidy(model_fit_sex, exponentiate = TRUE)
+
+estimation_sex %>% 
+  slice(-1) %>% 
+  mutate(estimate_percent = percent((estimate - 1), digits = 1)) %>% 
+  relocate(estimate_percent, .after = estimate)
+  
+```
+
+### Group Fairness for sex-reweighted model
+```{r}
+y_sex = model_fit_sex$pre$mold$outcomes %>% 
+  as.vector() %>% 
+  unlist(use.names = FALSE) %>% 
+  as.numeric()
+
+model_sex_explainer = explain_tidymodels(model = model_fit_sex,
+                                          data = data_group,
+                                          y = y_sex-1,
+                                          label = "Modell korrigiert für Geschlecht")
+
+rew_fairobj_sex = fairness_check(model_sex_explainer,
+                                 protected  = data_sex$sex,
+                                 privileged = "Männlich")
+
+plot(rew_fairobj_sex, fairness_metrics = c("STP", "TPR", "PPV")) +
+  facet_wrap(~ factor(metric, levels = c("Statistical parity ratio   (TP + FP)/(TP + FP + TN + FN)",
+                                         "Equal opportunity ratio     TP/(TP + FN)",
+                                         "Predictive parity ratio     TP/(TP + FP)"),
+                      labels = c("Statistical Parity",
+                                 "Equal Opportunity",
+                                 "Predictive Parity")
+                      ), ncol = 1) +
+  labs(title = "Gruppen-Fairness in Bezug auf Geschlecht",
+       subtitle = "für durch Reweighing korrigiertes Modell",
+       y = "Verhältnis weiblich/männlich",
+       x = "") +
+  theme(axis.text.y = element_blank()) +
+  guides(fill = "none")
+
+plot(group_metric(rew_fairobj_sex, fairness_metric = "STP"))
+plot(group_metric(rew_fairobj_sex, fairness_metric = "TPR"))
+plot(group_metric(rew_fairobj_sex, fairness_metric = "PPV"))
+
+plot_density(rew_fairobj_sex)
+```
+
+### Reweighing for Race
+```{r}
+weights_race = reweight(protected = data_group$race,
+                        y = as.numeric(data_group$compas)-1)
+
+data_race = data_group %>% 
+  mutate(weights = importance_weights(weights_race))
+
+recipe_race = recipe(compas ~ .,
+                     data = data_race) %>% 
+  step_dummy(all_nominal_predictors())
+
+model_race = logistic_reg() %>% 
+  set_engine("glm") %>% 
+  set_mode("classification")
+
+workflow_race = workflow() %>% 
+  add_model(model_race) %>% 
+  add_recipe(recipe_race) %>% 
+  add_case_weights(weights)
+
+model_fit_race = workflow_race %>% 
+  fit(data = data_race)
+
+estimation_race = tidy(model_fit_race, exponentiate = TRUE)
+
+estimation_race %>% 
+  slice(-1) %>% 
+  mutate(estimate_percent = percent((estimate - 1), digits = 1)) %>% 
+  relocate(estimate_percent, .after = estimate)
+```
+
+### Group Fairness for sex-reweighted model
+```{r}
+y_race = model_fit_race$pre$mold$outcomes %>% 
+  as.vector() %>% 
+  unlist(use.names = FALSE) %>% 
+  as.numeric()
+
+model_race_explainer = explain_tidymodels(model = model_fit_race,
+                                          data = data_group,
+                                          y = y_race-1,
+                                          label = "Modell korrigiert für Race")
+
+rew_fairobj_race = fairness_check(model_race_explainer,
+                                  protected  = data_race$race,
+                                  privileged = "Weiß")
+
+plot(rew_fairobj_race, fairness_metrics = c("STP", "TPR", "PPV")) +
+  facet_wrap(~ factor(metric, levels = c("Statistical parity ratio   (TP + FP)/(TP + FP + TN + FN)",
+                                         "Equal opportunity ratio     TP/(TP + FN)",
+                                         "Predictive parity ratio     TP/(TP + FP)"),
+                      labels = c("Statistical Parity",
+                                 "Equal Opportunity",
+                                 "Predictive Parity")
+                      ), ncol = 1) +
+  labs(title = "Gruppen-Fairness in Bezug auf Race",
+       subtitle = "für durch Reweighing korrigiertes Modell",
+       y = "Verhältnis unprivilegierte Race-Gruppe/Weiß",
+       x = "unprivilegierte Race-Gruppe") +
+  guides(fill = "none")
+
+plot(group_metric(rew_fairobj_race, fairness_metric = "STP"))
+plot(group_metric(rew_fairobj_race, fairness_metric = "TPR"))
+plot(group_metric(rew_fairobj_race, fairness_metric = "PPV"))
+
+plot_density(rew_fairobj_race)
+```
+
 

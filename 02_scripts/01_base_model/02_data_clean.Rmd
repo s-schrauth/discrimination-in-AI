@@ -140,11 +140,11 @@ eda_class = data_clean %>%
   select(compas) %>% 
   ggplot(aes(x = factor(compas), fill = factor(compas))) +
   geom_bar() +
-  labs(title = "Class Frequencies in the Compas Dataset",
-       subtitle = "With Class Variable 'COMPAS score'",
-       x = "COMPAS score", 
-       y = "Count") +
-  scale_x_discrete(labels = c("High Risk", "Low Risk")) +
+  labs(title = "Häufigkeit der Klassen-Variable im COMPAS-Datensatz",
+       subtitle = "mit Klassen-Variable 'COMPAS-Score'",
+       x = "COMPAS-Score", 
+       y = "Häufigkeit") +
+  scale_x_discrete(labels = c("Hohes Risiko", "Niedriges Risiko")) +
   scale_fill_manual(values = colors_discrete) +
   guides(fill = "none")
 
@@ -165,13 +165,25 @@ ggsave("01_eda_class.png",
 
 #### Protected variable: Race
 ```{r}
+race_relabel = function(x){
+  x = str_replace(x, "African-American", "Schwarz")
+  x = str_replace(x, "Caucasian", "Weiß")
+  x = str_replace(x, "Hispanic", "Hispanisch")
+  x = str_replace(x, "Other", "Andere")
+  x = str_replace(x, "Asian", "Asiatisch")
+  x = str_replace(x, "Native American", "Amerikanisch-Indigen")
+  
+  return(x)
+}
+
 eda_race = data_clean %>% 
   select(race) %>% 
+  mutate(race = fct_relabel(.f = race, .fun = ~ race_relabel(.x))) %>% 
   ggplot(aes(x = fct_infreq(race), fill = fct_infreq(race))) +
   geom_bar() +
-  labs(title = "Race Frequencies in the Compas Dataset",
+  labs(title = "Häufigkeit der Race-Variable im COMPAS-Datensatz",
        x = "Race", 
-       y = "Count") +
+       y = "Häufigkeit") +
   scale_fill_manual(values = colors_discrete) +
   guides(fill = "none")
 
@@ -206,14 +218,12 @@ eda_age_raincloud = data_clean %>%
     outlier.colour = NA,
     alpha = 0.5
   ) +
-  labs(title = "Age Distribution in the Compas Dataset",
-       subtitle = "Probability Density Function & Boxplot",
-       x = "Age", 
+  labs(title =  "Alters-Verteilung im COMPAS-Datensatz",
+       subtitle = "Wahrscheinlichkeitsdichte-Verteilung & Boxplot",
+       x = "Alter", 
        y = "") +
   scale_fill_manual(values = colors_discrete[3]) +
-  guides(fill = "none") +
-  theme(axis.ticks.y = element_blank(),
-        axis.text.y = element_blank())
+  guides(fill = "none")
 
 eda_age_raincloud
 ```
@@ -223,10 +233,10 @@ eda_age_hist = data_clean %>%
   select(age) %>% 
   ggplot(aes(x = age, fill = factor(1))) +
   geom_histogram(binwidth = 2) +
-  labs(title = "Age Distribution in the Compas Dataset",
-       subtitle = "Histogram with Binwidth 2",
-       x = "Age", 
-       y = "Density") +
+  labs(title = "Alters-Verteilung im COMPAS-Datensatz",
+       subtitle = "Histogramm mit Balkenbreite 2",
+       x = "Alter", 
+       y = "Dichte") +
   scale_fill_manual(values = colors_discrete[3]) +
   guides(fill = "none") 
 
@@ -259,11 +269,12 @@ ggsave("04_eda_age_hist.png",
 ```{r}
 eda_sex = data_clean %>% 
   select(sex) %>% 
+  mutate(sex = ifelse(sex == "Male", "Männlich", "Weiblich")) %>% 
   ggplot(aes(x = fct_infreq(sex), fill = fct_infreq(sex))) +
   geom_bar() +
-  labs(title = "Sex Frequencies in the Compas Dataset",
-       x = "Sex", 
-       y = "Count") +
+  labs(title =  "Geschlechter-Verteilung im COMPAS-Datensatz",
+       x = "Geschlecht", 
+       y = "Häufigkeit") +
   scale_fill_manual(values = colors_discrete) +
   guides(fill = "none")
 
@@ -287,6 +298,8 @@ ggsave("05_eda_sex.png",
 ```{r}
 eda_race_sex = data_clean %>% 
   count(race, sex) %>% 
+  mutate(race = fct_relabel(.f = race, .fun = ~ race_relabel(.x))) %>% 
+  mutate(sex = ifelse(sex == "Male", "Männlich", "Weiblich")) %>% 
   group_by(race) %>% 
   mutate(n_cum = sum(n)) %>% 
   ungroup() %>% 
@@ -295,10 +308,10 @@ eda_race_sex = data_clean %>%
   ggplot(aes(x = sex, y  = n_rel, fill = sex)) +
   geom_col() +
   facet_wrap(~race) +
-  labs(title = "Sex Frequencies in the Compas Dataset",
-       subtitle = "Grouped by Race",
-       x = "Sex", 
-       y = "Count") +
+  labs(title = "Geschlechter-Verteilung im COMPAS-Datensatz",
+       subtitle = "gruppiert nach Race",
+       x = "Geschlecht", 
+       y = "Häufigkeit") +
   scale_fill_manual(values = colors_discrete) +
   guides(fill = "none") +
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
@@ -325,6 +338,7 @@ ggsave("06_eda_race_sex.png",
 ```{r}
 eda_race_age = data_clean %>% 
   select(age, race) %>% 
+  mutate(race = fct_relabel(.f = race, .fun = ~ race_relabel(.x))) %>%
   ggplot(aes(x = race, y = age, fill = race)) +
   ggdist::stat_halfeye(
     adjust = 0.75,
@@ -337,10 +351,10 @@ eda_race_age = data_clean %>%
     outlier.colour = NA,
     alpha = 0.5
   ) +
-  labs(title = "Age Distribution in the Compas Dataset",
-       subtitle = "Grouped by Race",
+  labs(title = "Alters-Verteilung im COMPAS-Datensatz",
+       subtitle = "gruppiert nach Race",
        x = "Race", 
-       y = "Age") +
+       y = "Alter") +
   scale_fill_manual(values = colors_discrete) +
   guides(fill = "none") +
   coord_flip()
@@ -365,6 +379,7 @@ ggsave("07_eda_race_age.png",
 ```{r}
 eda_sex_age = data_clean %>% 
   select(age, sex) %>% 
+  mutate(sex = ifelse(sex == "Male", "Männlich", "Weiblich")) %>% 
   ggplot(aes(x = sex, y = age, fill = sex)) +
   ggdist::stat_halfeye(
     adjust = 0.75,
@@ -377,10 +392,10 @@ eda_sex_age = data_clean %>%
     outlier.colour = NA,
     alpha = 0.5
   ) +
-  labs(title = "Age Distribution in the Compas Dataset",
-       subtitle = "Grouped by Sex",
-       x = "Sex", 
-       y = "Age") +
+  labs(title = "Alters-Verteilung im COMPAS-Datensatz",
+       subtitle = "gruppiert nach Geschlecht",
+       x = "Geschlecht", 
+       y = "Alter") +
   scale_fill_manual(values = colors_discrete) +
   guides(fill = "none") +
   coord_flip()
