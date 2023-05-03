@@ -333,7 +333,7 @@ pred_sex = prediction_counter(params_df = model_sex$params,
                               color_nr = 3,
                               ymin_age_weight = -1,
                               ymax_age_weight = 1,
-                              plot_text = "Intervention bei Geschlecht", 
+                              plot_text = "Geschlecht: Männlich \u2194 Weiblich", 
                               plot_text_bin = "Männlich \u2194 Weiblich", 
                               plot_org_logit = pred_base$plot_counter_logit, 
                               plot_org_bin = pred_base$plot_counter_bin)
@@ -364,7 +364,7 @@ pred_race_wb = prediction_counter(params_df = model_race_wb$params,
                                   data = data_race_wb, 
                                   color_nr = 1, 
                                   seed = 49586783,
-                                  plot_text = "Intervention bei Race: Weiß \u2194 Schwarz", 
+                                  plot_text = "Race: Weiß \u2194 Schwarz", 
                                   plot_text_bin = "Weiß \u2194 Schwarz", 
                                   plot_org_logit = pred_base$plot_counter_logit, 
                                   plot_org_bin = pred_base$plot_counter_bin)
@@ -396,7 +396,7 @@ pred_race_wh = prediction_counter(params_df = model_race_wh$params,
                                   data = data_race_wh, 
                                   color_nr = 4, 
                                   seed = 28975065,
-                                  plot_text = "Intervention bei Race: Weiß \u2194 Hispanisch", 
+                                  plot_text = "Race: Weiß \u2194 Hispanisch", 
                                   plot_text_bin = "Weiß \u2194 Hispanisch", 
                                   plot_org_logit = pred_base$plot_counter_logit, 
                                   plot_org_bin = pred_base$plot_counter_bin)
@@ -428,7 +428,7 @@ pred_race_wo = prediction_counter(params_df = model_race_wo$params,
                                   data = data_race_wo, 
                                   color_nr = 5, 
                                   seed = 455927483,
-                                  plot_text = "Intervention bei Race: Weiß \u2194 Andere", 
+                                  plot_text = "Race: Weiß \u2194 Andere", 
                                   plot_text_bin = "Weiß \u2194 Andere", 
                                   plot_org_logit = pred_base$plot_counter_logit, 
                                   plot_org_bin = pred_base$plot_counter_bin)
@@ -599,7 +599,13 @@ plot_race_wo_logit = pred_race_wo$plot_comp_logit +
 
 #### Binary Outcomes
 ```{r}
-plot_sex_bin = pred_sex$plot_comp_bin
+plot_sex_bin = pred_sex$plot_comp_bin +
+          labs(title = "Vergleich der geschätzten Werte für den COMPAS-Score",
+             subtitle = "Häufigkeit der geschätzten Score-Werte für originale & kontrafaktische Daten (Geschlecht)",
+             x = "COMPAS-Score",
+             y = "Geschätzte Häufigkeit",
+             fill = "Daten") +
+          scale_fill_manual(values = as.vector(bin_colors_sex[,1]))
 
 pred_race_bin = pred_race_wb
 
@@ -607,7 +613,7 @@ pred_race_bin = prediction_counter(params_df = model_race_wh$params,
                                   data = data_race_wh, 
                                   color_nr = 4, 
                                   seed = 28975065,
-                                  plot_text = "Intervention bei Race: Weiß \u2194 Hispanisch", 
+                                  plot_text = "Race: Weiß \u2194 Hispanisch", 
                                   plot_text_bin = "Weiß \u2194 Hispanisch", 
                                   plot_org_logit = pred_race_bin$plot_comp_logit, 
                                   plot_org_bin = pred_race_bin$plot_comp_bin)
@@ -616,12 +622,17 @@ pred_race_bin = prediction_counter(params_df = model_race_wo$params,
                                   data = data_race_wo, 
                                   color_nr = 5, 
                                   seed = 455927483,
-                                  plot_text = "Intervention bei Race: Weiß \u2194 Andere", 
+                                  plot_text = "Race: Weiß \u2194 Andere", 
                                   plot_text_bin = "Weiß \u2194 Andere",
                                   plot_org_logit = pred_race_bin$plot_comp_logit, 
                                   plot_org_bin = pred_race_bin$plot_comp_bin)
 
-plot_race_bin = pred_race_bin$plot_comp_bin
+plot_race_bin = pred_race_bin$plot_comp_bin +
+        labs(title = "Vergleich der geschätzten Werte für den COMPAS-Score",
+             subtitle = "Häufigkeit der geschätzten Score-Werte für originale & kontrafaktische Daten (Race)",
+             x = "COMPAS-Score",
+             y = "Geschätzte Häufigkeit",
+             fill = "Daten")
 ```
 
 
@@ -649,16 +660,22 @@ weights_sex_counter = pred_sex$weight_table %>%
 plot_weights_sex = rbind(weights_sex_base, weights_sex_counter) %>% 
   pivot_wider(names_from = "value_type",
               values_from = "value") %>% 
+  mutate(Geschlecht = factor(Geschlecht, levels = c("Weiblich", "Männlich"))) %>% 
   mutate(ymin = median - (1/2)*mad,
          ymax = median + (1/2)*mad) %>% 
   ggplot(aes(x = Geschlecht, y = median, color = Geschlecht)) +
   geom_abline(intercept = 0, slope = 0, linewidth = 0.2) +
   geom_point(size = 2) +
   geom_errorbar(aes(x = Geschlecht, ymin = ymin, ymax = ymax), width = 0.3) +
-  facet_wrap(~ Modell, dir = "v") +
-  labs(y =  "Median \u00b1 MAD") +
+  facet_wrap(~ factor(Modell, levels = c("Original", 
+                                         "Männlich \u2194 Weiblich")
+                      ), 
+             dir = "v") +
+  labs(title = "Median & MAD der Regressions-Gewichte für COMPAS-Score-Gleichung",
+       subtitle = "für originale & kontrafaktische Daten (Geschlecht)",
+       y =  "Median \u00b1 MAD") +
   guides(color = "none") +
-  scale_color_manual(values = wes_palette("Zissou1")[2:3]) +
+  scale_color_manual(values = colors_discrete[c(3,2)]) +
   coord_flip()
 
 # Race
@@ -722,10 +739,17 @@ plot_weights_race = rbind(weights_race_base,
   geom_abline(intercept = 0, slope = 0, linewidth = 0.2) +
   geom_point(size = 0.8) +
   geom_errorbar(aes(x = Race, ymin = ymin, ymax = ymax), width = 0.8, linewidth = 0.3) +
-  facet_wrap(~ Modell, nrow = 4, ncol = 1) +
-  labs(y =  "Median \u00b1 MAD") +
+  facet_wrap(~ factor(Modell, levels = c("Original",
+                                         "Weiß \u2194 Schwarz",
+                                         "Weiß \u2194 Hispanisch",
+                                         "Weiß \u2194 Andere")
+                      ), 
+             nrow = 4, ncol = 1) +
+  labs(title = "Median & MAD der Regressions-Gewichte für COMPAS-Score-Gleichung",
+       subtitle = "für originale & kontrafaktische Daten (Race)",
+       y =  "Median \u00b1 MAD") +
   guides(color = "none") +
-  scale_color_manual(values = wes_palette("Zissou1")[2:5]) +
+  scale_color_manual(values = colors_discrete[c(5,4,1,2)]) +
   coord_flip()
 
 plot_weights_race

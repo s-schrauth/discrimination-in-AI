@@ -773,14 +773,9 @@
     "fairmodels": {
       "Package": "fairmodels",
       "Version": "1.2.1",
-      "Source": "GitHub",
-      "RemoteType": "github",
-      "RemoteHost": "api.github.com",
-      "RemoteRepo": "fairmodels",
-      "RemoteUsername": "s-schrauth",
-      "RemoteRef": "HEAD",
-      "RemoteSha": "cd7bea431180c0242a69534eb45208421a85064d",
-      "Hash": "293b0c9264ffd80e4c2f07702d1ba0cf",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "09b1aba8296a3a476aed6345f8cfed2a",
       "Requirements": [
         "DALEX",
         "ggplot2",

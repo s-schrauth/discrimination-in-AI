@@ -184,7 +184,7 @@ eda_race = data_clean %>%
   labs(title = "Häufigkeit der Race-Variable im COMPAS-Datensatz",
        x = "Race", 
        y = "Häufigkeit") +
-  scale_fill_manual(values = colors_discrete) +
+  scale_fill_manual(values = colors_discrete[c(1,2,4,5,3,2)]) +
   guides(fill = "none")
 
 eda_race
@@ -275,7 +275,7 @@ eda_sex = data_clean %>%
   labs(title =  "Geschlechter-Verteilung im COMPAS-Datensatz",
        x = "Geschlecht", 
        y = "Häufigkeit") +
-  scale_fill_manual(values = colors_discrete) +
+  scale_fill_manual(values = colors_discrete[c(2,3)]) +
   guides(fill = "none")
 
 eda_sex
@@ -304,7 +304,6 @@ eda_race_sex = data_clean %>%
   mutate(n_cum = sum(n)) %>% 
   ungroup() %>% 
   mutate(n_rel = n/n_cum) %>% 
-  
   ggplot(aes(x = sex, y  = n_rel, fill = sex)) +
   geom_col() +
   facet_wrap(~race) +
@@ -312,7 +311,7 @@ eda_race_sex = data_clean %>%
        subtitle = "gruppiert nach Race",
        x = "Geschlecht", 
        y = "Häufigkeit") +
-  scale_fill_manual(values = colors_discrete) +
+  scale_fill_manual(values = colors_discrete[c(2,3)]) +
   guides(fill = "none") +
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
   scale_y_continuous(labels = scales::percent)
@@ -339,6 +338,15 @@ ggsave("06_eda_race_sex.png",
 eda_race_age = data_clean %>% 
   select(age, race) %>% 
   mutate(race = fct_relabel(.f = race, .fun = ~ race_relabel(.x))) %>%
+  mutate(race = factor(race, levels = c("Andere",
+                                        "Amerikanisch-Indigen",
+                                        "Asiatisch",
+                                        "Hispanisch",
+                                        "Schwarz", 
+                                        "Weiß"
+                                        )
+                       )
+         ) %>% 
   ggplot(aes(x = race, y = age, fill = race)) +
   ggdist::stat_halfeye(
     adjust = 0.75,
@@ -355,7 +363,7 @@ eda_race_age = data_clean %>%
        subtitle = "gruppiert nach Race",
        x = "Race", 
        y = "Alter") +
-  scale_fill_manual(values = colors_discrete) +
+  scale_fill_manual(values = colors_discrete[c(1,2,4,5,3,2)]) +
   guides(fill = "none") +
   coord_flip()
 
@@ -380,6 +388,7 @@ ggsave("07_eda_race_age.png",
 eda_sex_age = data_clean %>% 
   select(age, sex) %>% 
   mutate(sex = ifelse(sex == "Male", "Männlich", "Weiblich")) %>% 
+  mutate(sex = factor(sex, levels = c("Weiblich", "Männlich"))) %>% 
   ggplot(aes(x = sex, y = age, fill = sex)) +
   ggdist::stat_halfeye(
     adjust = 0.75,
@@ -396,7 +405,7 @@ eda_sex_age = data_clean %>%
        subtitle = "gruppiert nach Geschlecht",
        x = "Geschlecht", 
        y = "Alter") +
-  scale_fill_manual(values = colors_discrete) +
+  scale_fill_manual(values = colors_discrete[c(3,2)]) +
   guides(fill = "none") +
   coord_flip()
 

@@ -322,7 +322,7 @@ prediction_counter = function(params_df,
                    linewidth = 1,
                    color = colors[color_nr]) +
       labs(title = "Vergleich geschätzter Wahrscheinlichkeiten für einen niedrigen COMPAS-Score",
-           subtitle = paste0("Histogramm und Dichtefunktion für originale & kontrafaktische Daten"),
+           subtitle = paste0("Histogramm und Dichtefunktion für originale & kontrafaktische Daten (", plot_text,")"),
            x = "Geschätzte Wahrscheinlichkeit für einen niedrigen COMPAS-Score",
            y = "Dichte") 
   }

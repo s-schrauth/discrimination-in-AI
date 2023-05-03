@@ -18,11 +18,8 @@ pacman::p_load(devtools,
                here,
                tidymodels,
                DALEXtra,
-               fairmodels)
-
-# if(!require(fairmodels)) install_github("s-schrauth/fairmodels")
-# 
-# library(fairmodels)
+               fairmodels,
+               wesanderson)
 
 tidymodels_prefer()
 ```
@@ -75,6 +72,8 @@ model_base_explainer = explain_tidymodels(model = model_fit,
                                           data = data_group,
                                           y = y-1,
                                           label = "Basis-Model")
+
+colors = wesanderson::wes_palette("Darjeeling1")
 ```
 
 ### Group Fairness for Sex
@@ -83,27 +82,39 @@ base_fairobj_sex = fairness_check(model_base_explainer,
                                   protected  = data_group$sex,
                                   privileged = "Männlich")
 
-plot(base_fairobj_sex, fairness_metrics = c("STP", "TPR", "PPV")) +
+plot_base_sex = plot(base_fairobj_sex, fairness_metrics = c("STP", "TPR", "PPV")) +
   facet_wrap(~ factor(metric, levels = c("Statistical parity ratio   (TP + FP)/(TP + FP + TN + FN)",
                                          "Equal opportunity ratio     TP/(TP + FN)",
                                          "Predictive parity ratio     TP/(TP + FP)"),
-                      labels = c("Statistical Parity",
-                                 "Equal Opportunity",
-                                 "Predictive Parity")
+                      labels = c("Statistical Parity \n(Equal Accuracy)",
+                                 "Equal Opportunity \n(Equal TPR)",
+                                 "Predictive Parity \n(Equal Precision)")
                       ), ncol = 1) +
   labs(title = "Gruppen-Fairness in Bezug auf Geschlecht",
        subtitle = "für Basis-Modell",
-       y = "Verhältnis weiblich/männlich",
-       x = "") +
+       y = "Verhältnis Weiblich/Männlich",
+       x = "Geschlecht") +
   theme(axis.text.y = element_blank()) +
-  guides(fill = "none")
+  scale_fill_manual(values = colors[5]) +
+  guides(fill = "none") +
+  theme_gray(base_size = 13)
 
-plot(group_metric(base_fairobj_sex, fairness_metric = "STP"))
-plot(group_metric(base_fairobj_sex, fairness_metric = "TPR"))
-plot(group_metric(base_fairobj_sex, fairness_metric = "PPV"))
-
-plot_density(base_fairobj_sex)
+plot_base_sex$layers[[1]]$aes_params$fill <- colors[2]
+plot_base_sex$layers[[2]]$aes_params$fill <- colors[1]
+plot_base_sex$layers[[3]]$aes_params$fill <- colors[1]
 ```
+
+```{r}
+plot_dens_base_sex = plot_density(base_fairobj_sex) +
+    scale_fill_manual(values = colors[c(2,3)]) +
+    guides(fill = "none") +
+    theme_gray(base_size = 13) +
+    labs(title = "Dichte-Verteilung für Geschlecht",
+         subtitle = "für Basis-Modell",
+         x = "Wahrscheinlichkeit für niedrigen COMPAS-Score",
+         y = "Geschlecht")
+```
+
 
 ### Group Fairness for Race
 ```{r}
@@ -111,26 +122,38 @@ base_fairobj_race = fairness_check(model_base_explainer,
                                    protected  = data_group$race,
                                    privileged = "Weiß")
 
-plot(base_fairobj_race, fairness_metrics = c("STP", "TPR", "PPV")) +
+plot_base_race = plot(base_fairobj_race, fairness_metrics = c("STP", "TPR", "PPV")) +
   facet_wrap(~ factor(metric, levels = c("Statistical parity ratio   (TP + FP)/(TP + FP + TN + FN)",
                                          "Equal opportunity ratio     TP/(TP + FN)",
                                          "Predictive parity ratio     TP/(TP + FP)"),
-                      labels = c("Statistical Parity",
-                                 "Equal Opportunity",
-                                 "Predictive Parity")
+                      labels = c("Statistical Parity \n(Equal Accuracy)",
+                                 "Equal Opportunity \n(Equal TPR)",
+                                 "Predictive Parity \n(Equal Precision)")
                       ), ncol = 1) +
   labs(title = "Gruppen-Fairness in Bezug auf Race",
        subtitle = "für Basis-Modell",
        y = "Verhältnis unprivilegierte Race-Gruppe/Weiß",
        x = "unprivilegierte Race-Gruppe") +
-  guides(fill = "none")
+  scale_fill_manual(values = colors[5]) +
+  guides(fill = "none") +
+  theme_gray(base_size = 13)
 
-plot(group_metric(base_fairobj_race, fairness_metric = "STP"))
-plot(group_metric(base_fairobj_race, fairness_metric = "TPR"))
-plot(group_metric(base_fairobj_race, fairness_metric = "PPV"))
-
-plot_density(base_fairobj_race)
+plot_base_race$layers[[1]]$aes_params$fill <- colors[2]
+plot_base_race$layers[[2]]$aes_params$fill <- colors[1]
+plot_base_race$layers[[3]]$aes_params$fill <- colors[1]
 ```
+
+```{r}
+plot_dens_base_race = plot_density(base_fairobj_race) +
+    scale_fill_manual(values = colors[c(5,4,1,2)]) +
+    guides(fill = "none") +
+    theme_gray(base_size = 13) +
+    labs(title = "Dichte-Verteilung für Race",
+         subtitle = "für Basis-Modell",
+         x = "Wahrscheinlichkeit für niedrigen COMPAS-Score",
+         y = "Race")
+```
+
 
 ## Pre-Processing
 ### Reweighing for Sex
@@ -176,33 +199,52 @@ y_sex = model_fit_sex$pre$mold$outcomes %>%
 model_sex_explainer = explain_tidymodels(model = model_fit_sex,
                                           data = data_group,
                                           y = y_sex-1,
-                                          label = "Modell korrigiert für Geschlecht")
+                                          label = "Pre-processed Modell")
 
-rew_fairobj_sex = fairness_check(model_sex_explainer,
+rew_fairobj_sex = fairness_check(model_base_explainer, model_sex_explainer,
                                  protected  = data_sex$sex,
                                  privileged = "Männlich")
 
-plot(rew_fairobj_sex, fairness_metrics = c("STP", "TPR", "PPV")) +
+plot_rew_sex = plot(rew_fairobj_sex, fairness_metrics = c("STP", "TPR", "PPV")) +
   facet_wrap(~ factor(metric, levels = c("Statistical parity ratio   (TP + FP)/(TP + FP + TN + FN)",
                                          "Equal opportunity ratio     TP/(TP + FN)",
                                          "Predictive parity ratio     TP/(TP + FP)"),
-                      labels = c("Statistical Parity",
-                                 "Equal Opportunity",
-                                 "Predictive Parity")
+                      labels = c("Statistical Parity \n(Equal Accuracy)",
+                                 "Equal Opportunity \n(Equal TPR)",
+                                 "Predictive Parity \n(Equal Precision)")
                       ), ncol = 1) +
   labs(title = "Gruppen-Fairness in Bezug auf Geschlecht",
-       subtitle = "für durch Reweighing korrigiertes Modell",
-       y = "Verhältnis weiblich/männlich",
-       x = "") +
+       subtitle = "für Basis-Modell & Modell korrigiert für Geschlecht",
+       y = "Verhältnis Weiblich/Männlich",
+       x = "",
+       fill = "") +
   theme(axis.text.y = element_blank()) +
-  guides(fill = "none")
+  scale_fill_manual(values = colors[c(5,3)]) +
+  theme_gray(base_size = 13) +
+  theme(legend.position = "top")
 
+plot_rew_sex$layers[[1]]$aes_params$fill <- colors[2]
+plot_rew_sex$layers[[2]]$aes_params$fill <- colors[1]
+plot_rew_sex$layers[[3]]$aes_params$fill <- colors[1]
+```
+
+```{r}
+plot_dens_rew_sex = plot_density(rew_fairobj_sex) +
+    scale_fill_manual(values = colors[c(2,3)]) +
+    guides(fill = "none") +
+    theme_gray(base_size = 13) +
+    labs(title = "Dichte-Verteilung für Geschlecht",
+         subtitle = "für Basis-Modell & Modell korrigiert für Geschlecht",
+         x = "Wahrscheinlichkeit für niedrigen COMPAS-Score",
+         y = "Geschlecht")
+```
+
+```{r}
 plot(group_metric(rew_fairobj_sex, fairness_metric = "STP"))
 plot(group_metric(rew_fairobj_sex, fairness_metric = "TPR"))
 plot(group_metric(rew_fairobj_sex, fairness_metric = "PPV"))
-
-plot_density(rew_fairobj_sex)
 ```
+
 
 ### Reweighing for Race
 ```{r}
@@ -236,7 +278,7 @@ estimation_race %>%
   relocate(estimate_percent, .after = estimate)
 ```
 
-### Group Fairness for sex-reweighted model
+### Group Fairness for race-reweighted model
 ```{r}
 y_race = model_fit_race$pre$mold$outcomes %>% 
   as.vector() %>% 
@@ -246,31 +288,132 @@ y_race = model_fit_race$pre$mold$outcomes %>%
 model_race_explainer = explain_tidymodels(model = model_fit_race,
                                           data = data_group,
                                           y = y_race-1,
-                                          label = "Modell korrigiert für Race")
+                                          label = "Pre-processed Modell")
 
-rew_fairobj_race = fairness_check(model_race_explainer,
+rew_fairobj_race = fairness_check(model_base_explainer, model_race_explainer,
                                   protected  = data_race$race,
                                   privileged = "Weiß")
 
-plot(rew_fairobj_race, fairness_metrics = c("STP", "TPR", "PPV")) +
+plot_rew_race = plot(rew_fairobj_race, fairness_metrics = c("STP", "TPR", "PPV")) +
   facet_wrap(~ factor(metric, levels = c("Statistical parity ratio   (TP + FP)/(TP + FP + TN + FN)",
                                          "Equal opportunity ratio     TP/(TP + FN)",
                                          "Predictive parity ratio     TP/(TP + FP)"),
-                      labels = c("Statistical Parity",
-                                 "Equal Opportunity",
-                                 "Predictive Parity")
+                      labels = c("Statistical Parity \n(Equal Accuracy)",
+                                 "Equal Opportunity \n(Equal TPR)",
+                                 "Predictive Parity \n(Equal Precision)")
                       ), ncol = 1) +
   labs(title = "Gruppen-Fairness in Bezug auf Race",
        subtitle = "für durch Reweighing korrigiertes Modell",
        y = "Verhältnis unprivilegierte Race-Gruppe/Weiß",
-       x = "unprivilegierte Race-Gruppe") +
-  guides(fill = "none")
+       x = "unprivilegierte Race-Gruppe",
+       fill = "")  +
+  theme(axis.text.y = element_blank()) +
+  scale_fill_manual(values = colors[c(5,3)]) +
+  theme_gray(base_size = 13) +
+  theme(legend.position = "top")
 
+plot_rew_race$layers[[1]]$aes_params$fill <- colors[2]
+plot_rew_race$layers[[2]]$aes_params$fill <- colors[1]
+plot_rew_race$layers[[3]]$aes_params$fill <- colors[1]
+```
+
+```{r}
+plot_dens_rew_race = plot_density(rew_fairobj_race) +
+    scale_fill_manual(values = colors[c(5,4,1,2)]) +
+    guides(fill = "none") +
+    theme_gray(base_size = 13) +
+    labs(title = "Dichte-Verteilung für Race",
+         subtitle = "für Basis-Modell & Modell korrigiert für Race",
+         x = "Wahrscheinlichkeit für niedrigen COMPAS-Score",
+         y = "Race")
+```
+
+```{r}
 plot(group_metric(rew_fairobj_race, fairness_metric = "STP"))
 plot(group_metric(rew_fairobj_race, fairness_metric = "TPR"))
 plot(group_metric(rew_fairobj_race, fairness_metric = "PPV"))
-
-plot_density(rew_fairobj_race)
 ```
 
+## Save Plots
+```{r}
+ggsave("01_plot_base_sex.png",
+       plot = plot_base_sex,
+       device = "png",
+       path = here("03_outputs", "03_group"),
+       dpi = 300,
+       width = 20,
+       height = 20,
+       units = c("cm")
+       )
+
+ggsave("02_plot_dens_base_sex.png",
+       plot = plot_dens_base_sex,
+       device = "png",
+       path = here("03_outputs", "03_group"),
+       dpi = 300,
+       width = 20,
+       height = 20,
+       units = c("cm")
+       )
+
+ggsave("03_plot_base_race.png",
+       plot = plot_base_race,
+       device = "png",
+       path = here("03_outputs", "03_group"),
+       dpi = 300,
+       width = 20,
+       height = 20,
+       units = c("cm")
+       )
+
+ggsave("04_plot_dens_base_race.png",
+       plot = plot_dens_base_race,
+       device = "png",
+       path = here("03_outputs", "03_group"),
+       dpi = 300,
+       width = 20,
+       height = 20,
+       units = c("cm")
+       )
+
+ggsave("05_plot_rew_sex.png",
+       plot = plot_rew_sex,
+       device = "png",
+       path = here("03_outputs", "03_group"),
+       dpi = 300,
+       width = 20,
+       height = 20,
+       units = c("cm")
+       )
+
+ggsave("06_plot_dens_rew_sex.png",
+       plot = plot_dens_rew_sex,
+       device = "png",
+       path = here("03_outputs", "03_group"),
+       dpi = 300,
+       width = 20,
+       height = 20,
+       units = c("cm")
+       )
+
+ggsave("07_plot_rew_race.png",
+       plot = plot_rew_race,
+       device = "png",
+       path = here("03_outputs", "03_group"),
+       dpi = 300,
+       width = 20,
+       height = 20,
+       units = c("cm")
+       )
+
+ggsave("08_plot_dens_rew_race.png",
+       plot = plot_dens_rew_race,
+       device = "png",
+       path = here("03_outputs", "03_group"),
+       dpi = 300,
+       width = 20,
+       height = 20,
+       units = c("cm")
+       )
+```
 
