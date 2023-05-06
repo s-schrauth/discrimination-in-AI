@@ -57,6 +57,7 @@ diff_dist = function(prob, data){
   # Difference Ddist & ddist
   ## count the cases where individual fairness is not given
   diff_dist = ifelse(Ddist > ddist, 1, 0)
+  diff_dist_num = Ddist-ddist
   
   ## calculate relative proportion of those cases w.r.t all pair-wise distances
   n_unfair = sum(diff_dist, na.rm = TRUE)
@@ -67,6 +68,7 @@ diff_dist = function(prob, data){
   
   # Output
   output = list(diff_dist = diff_dist,
+                diff_dist_num =diff_dist_num,
                 n_unfair_rel = n_unfair_rel)
   
   return(output)
@@ -189,7 +191,7 @@ my_method_with_penalty <- function(x, y,
   beta = rep(0, ncol(x))
   
   # Set the maximum number of iterations to 100
-  max_iter = 2 #####!!!!!!!!!!
+  max_iter = 100 
   
   # Set the convergence threshold to 1e-6
   tol = 1e-6

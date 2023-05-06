@@ -15,7 +15,10 @@ After executing this script, the base model (logistic regression) for the COMPAS
 ```{r}
 pacman::p_load(tidyverse, 
                here,
-               tidymodels)
+               tidymodels,
+               knitr,
+               kableExtra,
+               magick)
 
 tidymodels_prefer()
 ```
@@ -56,6 +59,41 @@ estimation %>%
   slice(-1) %>% 
   mutate(estimate_percent = percent((estimate - 1), digits = 1)) %>% 
   relocate(estimate_percent, .after = estimate)
+
+estimation_nice = estimation %>% 
+    slice(-1) %>% 
+    mutate(term = case_when(
+      term == "age" ~ "Alter",
+      term == "days_in_jail" ~ "Tage im Gefängnis",
+      term == "juv_fel_count" ~ "Straftaten (jugendl.)",
+      term == "juv_misd_count" ~ "Ordnungswidr. (jugendl.)",
+      term == "juv_other_count" ~ "Andere Anzeigen (jugendl.)",
+      term == "priors_count" ~ "Anzahl Straftaten",
+      term == "sex_Female" ~ "Geschlecht: Weiblich",
+      term == "race_African.American" ~ "Race: Schwarz",
+      term == "race_Hispanic" ~ "Race: Hispanisch",
+      term == "race_Other" ~ "Race: Andere",
+      term == "charge_degree_M" ~ "Schwere der Straftat: Ordnungswidr.",
+      term == "two_year_recid_yes" ~ "Rückfälligkeit: Ja",
+      .default = term
+        )
+      ) %>% 
+    column_to_rownames(var = "term") %>% 
+    mutate(estimate_percent = percent(estimate-1, accuracy = 0.1)) %>% 
+    relocate(estimate_percent, .after = estimate) %>% 
+    rename("Schätzer" = estimate,
+           "Schätzer (in Prozent)" = estimate_percent,
+           Standardfehler = std.error,
+           "z-Wert" = statistic,
+           "p-Wert" = p.value)
+
+kable(estimation_nice, booktabs = TRUE, 
+      align = "c", 
+      digits = c(3, 1, 3, 2, 4)) %>% 
+  row_spec(seq(1, nrow(estimation_nice), 2), background = "#f8f8f8") %>% 
+  kable_styling() %>% 
+  save_kable(file = here("03_outputs", "01_base_model", "09_table_estimates.png"),
+             density = 500)
 ```
 
 

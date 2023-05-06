@@ -13,13 +13,22 @@ After executing this script, the individual fairness/discrimination of the base 
 ## Preparation
 ### Install packages
 ```{r}
+# when running the script the first time
+webshot::install_phantomjs()
+```
+
+
+```{r}
 pacman::p_load(tidyverse, 
                here,
                tidymodels,
                cluster,
                scales,
                MLmetrics,
-               wesanderson)
+               wesanderson,
+               knitr,
+               kableExtra,
+               magick)
 
 tidymodels_prefer()
 ```
@@ -47,7 +56,10 @@ data_prep = recipe(compas ~ .,
   prep() %>% 
   bake(new_data = NULL) %>% 
   mutate(compas = as.numeric(compas)-1)
+```
 
+
+```{r}
 model_base = glm(compas ~ ., 
                  data = data_prep, 
                  family = binomial(link = "logit"),
@@ -58,11 +70,42 @@ model_base_summary = data.frame(estimate = model_base$coefficients,
                                 z = model_base$z,
                                 p_value = model_base$p)
 
-model_base_summary %>% 
+model_base_summary_nice = model_base_summary %>% 
     slice(-1) %>% 
+    rownames_to_column() %>% 
+    mutate(rowname = case_when(
+      rowname == "age" ~ "Alter",
+      rowname == "days_in_jail" ~ "Tage im Gefängnis",
+      rowname == "juv_fel_count" ~ "Straftaten (jugendl.)",
+      rowname == "juv_misd_count" ~ "Ordnungswidr. (jugendl.)",
+      rowname == "juv_other_count" ~ "Andere Anzeigen (jugendl.)",
+      rowname == "priors_count" ~ "Anzahl Straftaten",
+      rowname == "sex_Female" ~ "Geschlecht: Weiblich",
+      rowname == "race_African.American" ~ "Race: Schwarz",
+      rowname == "race_Hispanic" ~ "Race: Hispanisch",
+      rowname == "race_Other" ~ "Race: Andere",
+      rowname == "charge_degree_M" ~ "Schwere der Straftat: Ordnungswidr.",
+      rowname == "two_year_recid_yes" ~ "Rückfälligkeit: Ja",
+      .default = rowname
+        )
+      ) %>% 
+    column_to_rownames(var = "rowname") %>% 
     mutate(estimate = exp(estimate)) %>% 
     mutate(estimate_percent = percent((estimate - 1), digits = 1)) %>% 
-    relocate(estimate_percent, .after = estimate)
+    relocate(estimate_percent, .after = estimate) %>% 
+    rename("Schätzer" = estimate,
+           "Schätzer (in Prozent)" = estimate_percent,
+           Standardfehler = se,
+           "z-Wert" = z,
+           "p-Wert" = p_value)
+
+kable(model_base_summary_nice, booktabs = TRUE, 
+      align = "c", 
+      digits = c(3, 1, 3, 2, 4)) %>% 
+  row_spec(seq(1, nrow(model_base_summary_nice), 2), background = "#f8f8f8") %>% 
+  kable_styling() %>% 
+  save_kable(file = here("03_outputs", "02_individual", "08_table_base.png"),
+             density = 500)
 ```
 
 ### Calculate individual discrimination
@@ -76,6 +119,19 @@ dist_base = diff_dist(prob = base_prob,
                       data = data)
 
 dist_base$n_unfair_rel
+
+plot_base_rel = data.frame(x = c("Fair", "Unfair"),
+                           y = c(1-dist_base$n_unfair_rel, dist_base$n_unfair_rel)) %>% 
+  ggplot(aes(x = x, y = y, fill = factor(1))) +
+    geom_col() +
+    geom_text(aes(label = percent(y, accuracy = 0.1)), vjust = -0.35) +
+    labs(title = "Anteil an fairen Paar-Vergleichen",
+         subtitle = "mit (individueller) Fairness als D(Mx, My) \u2264 d(x,y)",
+         x = "",
+         y = "Anteil an allen Paar-Vergleichen") +
+    scale_fill_manual(values = wes_palette("Darjeeling1")[5]) +
+    scale_y_continuous(labels = percent) +
+    guides(fill = "none")
 ```
 
 ### Save output
@@ -88,6 +144,7 @@ saveRDS(dist_base,
         file = here("01_data", "02_data_processed", "02_individual", "big_data",
                     "01_dist_base.rds"))
 ```
+
 ```{r}
 model_base = readRDS(file = here("01_data", "02_data_processed", "02_individual", 
                                  "01_model_base.rds"))
@@ -96,15 +153,103 @@ dist_base = readRDS(file = here("01_data", "02_data_processed", "02_individual",
                                 "01_dist_base.rds"))
 ```
 
+```{r}
+plot_base_matrix = dist_base$diff_dist %>% 
+  as.data.frame() %>%
+  rename_with(.fn = ~ str_replace(., "V", "")) %>% 
+  rename_with(.fn = ~ str_replace(., "^(\\d)$", "000\\1")) %>% 
+  rename_with(.fn = ~ str_replace(., "^(\\d{2})$", "00\\1")) %>% 
+  rename_with(.fn = ~ str_replace(., "^(\\d{3})$", "0\\1")) %>% 
+  rownames_to_column() %>% 
+  mutate(rowname = str_replace(rowname, "^(\\d)$", "000\\1")) %>% 
+  mutate(rowname = str_replace(rowname, "^(\\d{2})$", "00\\1")) %>% 
+  mutate(rowname = str_replace(rowname, "^(\\d{3})$", "0\\1")) %>% 
+  pivot_longer(cols = !c(rowname)) %>% 
+  ggplot(aes(x = name, y = rowname, fill = factor(value))) +
+    geom_tile() +
+    labs(title = "Individuelle Fairness für jeden Paar-Vergleich aller Daten-Punkte",
+         subtitle = "für Orginial-Modell",
+         x = "",
+         y = "") +
+  scale_fill_manual(name = "", 
+                    labels = c("Fair", "Unfair", "x"), 
+                    values = c("0" = wes_palette("Darjeeling1")[2], 
+                               "1" = wes_palette("Darjeeling1")[1],
+                               "NA" = "gray")) +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+```
+
+```{r}
+diff_dist_num = dist_base$diff_dist_num
+diff_dist_num[upper.tri(diff_dist_num)] = t(diff_dist_num)[upper.tri(diff_dist_num)]
+
+diff_dist_ordered = diff_dist_num %>% 
+  as.data.frame() %>% 
+  summarise(across(.cols = everything(),
+                   .fns = ~sum(.x, na.rm = TRUE))) %>% 
+  pivot_longer(cols = everything()) %>%
+  mutate(value = value/2) %>% 
+  arrange(desc(value))
+
+plot_base_dens = diff_dist_ordered %>% 
+  ggplot() +
+    geom_vline(xintercept = 1, linetype = "dashed", color = "grey") +
+    geom_histogram(aes(x = value, y = after_stat(density)),
+                   bins = 50,
+                   fill = wes_palette("Darjeeling1")[5],
+                   alpha = 0.5) +
+    geom_density(aes(x = value),
+                 linewidth = 1,
+                 color = wes_palette("Darjeeling1")[5]) +
+    labs(title = "Differenz der Input- und Output-Unterschiede aller Daten-Paare",
+         subtitle = "Histogramm und Dichte für D(Mx,My)-d(x,y)",
+         x = "Differenz von D(Mx,My) und d(x,y)",
+         y = "Dichte") 
+```
+
+
+```{r}
+ggsave("01_plot_base_rel.png",
+       plot = plot_base_rel,
+       device = "png",
+       path = here("03_outputs", "02_individual"),
+       dpi = 300,
+       width = 20,
+       height = 12,
+       units = c("cm")
+       )
+
+ggsave("02_plot_base_matrix.png",
+       plot = plot_base_matrix,
+       device = "png",
+       path = here("03_outputs", "02_individual"),
+       dpi = 300,
+       width = 30,
+       height = 30,
+       units = c("cm")
+       )
+
+ggsave("03_plot_base_dens.png",
+       plot = plot_base_dens,
+       device = "png",
+       path = here("03_outputs", "02_individual"),
+       dpi = 300,
+       width = 20,
+       height = 12,
+       units = c("cm")
+       )
+```
+
 
 ## In-Processing
 ### Hyper-Parameter Tuning (lambda)
 ```{r}
-lambdas = seq(-150, 0, 30)
-# in functions von 2 auf 100!!!!
+lambdas = seq(-120, 0, 20)
 
 results_fair = c()
-
 results_acc = c()
 
 for (lambda in lambdas) {
@@ -134,37 +279,65 @@ for (lambda in lambdas) {
   results_fair = append(results_fair, values = dist_linf_pen$n_unfair_rel)
   results_acc = append(results_acc, values = logloss)
 }
+```
 
+```{r}
 hyperparam_results = data.frame(Lambda = lambdas,
                                 Fairness_Metrik = results_fair,
                                 Log_Loss = results_acc) %>% 
   mutate(Kosten_Funktion = Log_Loss + Lambda * Fairness_Metrik)
 
-################ noch base_diff als Referenzwert einfügen!!! #########
-hyperparam_results %>% 
+plot_hyperparam_results = hyperparam_results %>% 
   pivot_longer(cols = !Lambda) %>% 
   mutate(name = str_replace(name, "_", "-")) %>% 
   ggplot(aes(x = Lambda, y = value, color = name)) +
+    geom_vline(xintercept = -100,
+               color = wes_palette("Darjeeling1")[3]) +
     geom_point() +
     geom_line() +
-  facet_wrap(~factor(name, levels = c("Log-Loss",
-                                      "Fairness-Metrik",
-                                      "Kosten-Funktion")
-                     ), 
-             scales = "free_y") +
-  scale_color_manual(values = wes_palette("Darjeeling1")) +
-  labs(title = "Hyperparameter-Tuning für \u03bb",
-       subtitle = "Log-loss, Fairness-Metrik & Kosten-Funktion (Log-loss + \u03bb * Fairness-Metrik) \nbei unterschiedlichen \u03bb-Werten",
-       y = "") +
-  guides(color = "none")
-
-# nur nach Fairness-Metrik hin optimieren?
-
-final_lambda = -99
+    facet_wrap(~factor(name, levels = c("Log-Loss",
+                                        "Fairness-Metrik",
+                                        "Kosten-Funktion")
+                       ), 
+               scales = "free_y") +
+    scale_color_manual(values = wes_palette("Darjeeling1")[c(2,1,5)]) +
+    scale_x_continuous(breaks = lambdas) +
+    labs(title = "Hyperparameter-Tuning für \u03bb",
+         subtitle = "Log-loss, Fairness-Metrik & Kosten-Funktion (Log-loss + \u03bb * Fairness-Metrik) \nbei unterschiedlichen \u03bb-Werten",
+         y = "") +
+    guides(color = "none")
 ```
+
+
+```{r}
+saveRDS(hyperparam_results,
+        file = here("01_data", "02_data_processed", "02_individual", 
+                    "03_hyperparam_results.rds"))
+
+```
+
+```{r}
+hyperparam_results = readRDS(file = here("01_data", "02_data_processed", "02_individual", 
+                                         "03_hyperparam_results.rds"))
+```
+
+```{r}
+ggsave("04_plot_hyperparam_results.png",
+       plot = plot_hyperparam_results,
+       device = "png",
+       path = here("03_outputs", "02_individual"),
+       dpi = 300,
+       width = 20,
+       height = 12,
+       units = c("cm")
+       )
+```
+
 
 ### Final fair model
 ```{r}
+final_lambda = -100
+
 model_fair = glm(compas ~ ., 
                  data = data_prep, 
                  family = binomial(link = "logit"),
@@ -183,20 +356,135 @@ model_fair_summary %>%
     mutate(estimate_percent = percent((estimate - 1), digits = 1)) %>% 
     relocate(estimate_percent, .after = estimate)
 
+model_fair_summary_nice = model_fair_summary %>% 
+    slice(-1) %>% 
+    rownames_to_column() %>% 
+    mutate(rowname = case_when(
+      rowname == "age" ~ "Alter",
+      rowname == "days_in_jail" ~ "Tage im Gefängnis",
+      rowname == "juv_fel_count" ~ "Straftaten (jugendl.)",
+      rowname == "juv_misd_count" ~ "Ordnungswidr. (jugendl.)",
+      rowname == "juv_other_count" ~ "Andere Anzeigen (jugendl.)",
+      rowname == "priors_count" ~ "Anzahl Straftaten",
+      rowname == "sex_Female" ~ "Geschlecht: Weiblich",
+      rowname == "race_African.American" ~ "Race: Schwarz",
+      rowname == "race_Hispanic" ~ "Race: Hispanisch",
+      rowname == "race_Other" ~ "Race: Andere",
+      rowname == "charge_degree_M" ~ "Schwere der Straftat: Ordnungswidr.",
+      rowname == "two_year_recid_yes" ~ "Rückfälligkeit: Ja",
+      .default = rowname
+        )
+      ) %>% 
+    column_to_rownames(var = "rowname") %>% 
+    mutate(estimate = exp(estimate)) %>% 
+    mutate(estimate_percent = percent(round((estimate - 1),3), digits = 1)) %>% 
+    relocate(estimate_percent, .after = estimate) %>% 
+    rename("Schätzer" = estimate,
+           "Schätzer (in Prozent)" = estimate_percent,
+           Standardfehler = se,
+           "z-Wert" = z,
+           "p-Wert" = p_value)
+
+kable(model_fair_summary_nice, booktabs = TRUE, 
+      align = "c", 
+      digits = c(3, 1, 3, 2, 4)) %>% 
+  row_spec(seq(1, nrow(model_fair_summary_nice), 2), background = "#f8f8f8") %>% 
+  kable_styling() %>% 
+  save_kable(file = here("03_outputs", "02_individual", "09_table_fair.png"),
+             density = 500)
 ```
 
 Calculate individual discrimination
 ```{r}
 # extract probabilities out of base model
-pen_prob_fair = my_predict(summary = model_fair_summary, 
-                           data = data_prep)
+prob_fair = my_predict(summary = model_fair_summary, 
+                       data = data_prep)
 
 # calculate proportion of cases where individual fairness is not given (D(Mx, My) > d(x,y))
-dist_pen_fair = diff_dist(prob = pen_prob_fair, 
-                          data = data)
+dist_fair = diff_dist(prob = prob_fair, 
+                      data = data)
 
-dist_pen_fair$n_unfair_rel
+data_plot_fair_rel = data.frame(x = c("Fair", "Unfair"),
+                                y = c(1-dist_fair$n_unfair_rel, dist_fair$n_unfair_rel),
+                                data = "In-processed Modell")
+
+plot_fair_rel = plot_base_rel$data %>% 
+  mutate(data = "Original-Modell") %>% 
+  rbind(data_plot_fair_rel) %>% 
+  ggplot(aes(x = x, y = y, fill = data)) +
+    geom_col(position = position_dodge(0.82), width = 0.8) +
+    geom_text(aes(label = percent(y, accuracy = 0.1)), 
+              position = position_dodge(0.82), 
+              vjust = -0.35) +
+    labs(title = "Anteil an fairen Paar-Vergleichen",
+         subtitle = "mit (individueller) Fairness als D(Mx, My) \u2264 d(x,y)",
+         x = "",
+         y = "Anteil an allen Paar-Vergleichen",
+         fill = "Modell") +
+    scale_fill_manual(values = wes_palette("Darjeeling1")[c(3, 5)]) +
+    scale_y_continuous(labels = percent)
 ```
+
+
+```{r}
+plot_fair_matrix = dist_fair$diff_dist %>% 
+  as.data.frame() %>%
+  rename_with(.fn = ~ str_replace(., "V", "")) %>% 
+  rename_with(.fn = ~ str_replace(., "^(\\d)$", "000\\1")) %>% 
+  rename_with(.fn = ~ str_replace(., "^(\\d{2})$", "00\\1")) %>% 
+  rename_with(.fn = ~ str_replace(., "^(\\d{3})$", "0\\1")) %>% 
+  rownames_to_column() %>% 
+  mutate(rowname = str_replace(rowname, "^(\\d)$", "000\\1")) %>% 
+  mutate(rowname = str_replace(rowname, "^(\\d{2})$", "00\\1")) %>% 
+  mutate(rowname = str_replace(rowname, "^(\\d{3})$", "0\\1")) %>% 
+  pivot_longer(cols = !c(rowname)) %>% 
+  ggplot(aes(x = name, y = rowname, fill = factor(value))) +
+    geom_tile() +
+    labs(title = "Individuelle Fairness für jeden Paar-Vergleich aller Daten-Punkte",
+         subtitle = "für In-processed Modell",
+         x = "",
+         y = "") +
+  scale_fill_manual(name = "", 
+                    labels = c("Fair", "Unfair", "x"), 
+                    values = c("0" = wes_palette("Darjeeling1")[2], 
+                               "1" = wes_palette("Darjeeling1")[1],
+                               "NA" = "gray")) +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+```
+
+```{r}
+diff_dist_num_fair = dist_fair$diff_dist_num
+diff_dist_num_fair[upper.tri(diff_dist_num_fair)] = t(diff_dist_num_fair)[upper.tri(diff_dist_num_fair)]
+
+diff_dist_ordered_fair = diff_dist_num_fair %>% 
+  as.data.frame() %>% 
+  summarise(across(.cols = everything(),
+                   .fns = ~sum(.x, na.rm = TRUE))) %>% 
+  pivot_longer(cols = everything()) %>%
+  mutate(value = value/2) %>% 
+  arrange(desc(value))
+
+plot_fair_dens = plot_base_dens +
+    geom_histogram(data = diff_dist_ordered_fair,
+                   aes(x = value, y = after_stat(density)),
+                   bins = 50,
+                   fill = wes_palette("Darjeeling1")[3],
+                   alpha = 0.5) +
+    geom_density(data = diff_dist_ordered_fair,
+                 aes(x = value),
+                 linewidth = 1,
+                 color = wes_palette("Darjeeling1")[3]) +
+    labs(title = "Differenz der Input- und Output-Unterschiede aller Daten-Paare",
+         subtitle = "Histogramm und Dichte für D(Mx,My)-d(x,y)",
+         x = "Differenz von D(Mx,My) und d(x,y)",
+         y = "Dichte") +
+    geom_label(x = -820, y = 0.0035, label = "In-processed", color = wes_palette("Darjeeling1")[3]) +
+    geom_label(x = -50, y = 0.002, label = "Original", color = wes_palette("Darjeeling1")[5]) 
+```
+
 
 Save output
 ```{r}
@@ -204,16 +492,48 @@ saveRDS(model_fair,
         file = here("01_data", "02_data_processed", "02_individual", 
                     "02_model_fair.rds"))
 
-saveRDS(dist_pen_fair,
+saveRDS(dist_fair,
         file = here("01_data", "02_data_processed", "02_individual", "big_data",
-                    "02_dist_pen_fair.rds"))
+                    "02_dist_fair.rds"))
 ```
 
 ```{r}
 model_fair = readRDS(file = here("01_data", "02_data_processed", "02_individual", 
                                  "02_model_fair.rds"))
 
-dist_pen_fair = readRDS(file = here("01_data", "02_data_processed", "02_individual", "big_data",
-                               "02_dist_pen_fair.rds"))
+dist_fair = readRDS(file = here("01_data", "02_data_processed", "02_individual", "big_data",
+                                "02_dist_fair.rds"))
+```
+
+```{r}
+ggsave("05_plot_fair_rel.png",
+       plot = plot_fair_rel,
+       device = "png",
+       path = here("03_outputs", "02_individual"),
+       dpi = 300,
+       width = 20,
+       height = 12,
+       units = c("cm")
+       )
+
+ggsave("06_plot_fair_matrix.png",
+       plot = plot_fair_matrix,
+       device = "png",
+       path = here("03_outputs", "02_individual"),
+       dpi = 300,
+       width = 30,
+       height = 30,
+       units = c("cm")
+       )
+
+ggsave("07_plot_fair_dens.png",
+       plot = plot_fair_dens,
+       device = "png",
+       path = here("03_outputs", "02_individual"),
+       dpi = 300,
+       width = 20,
+       height = 12,
+       units = c("cm")
+       )
 ```
 

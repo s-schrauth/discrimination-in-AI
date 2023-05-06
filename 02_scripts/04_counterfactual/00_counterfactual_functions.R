@@ -385,7 +385,7 @@ prediction_counter = function(params_df,
 ### Function for approximate counterfactual fairness
 approx_counterfairness = function(base_outcome = pred_base$counter_pred,
                                   counter_outcome,
-                                  epsilon = 0.1){
+                                  epsilon){
   
   diff = abs(base_outcome-counter_outcome)
   

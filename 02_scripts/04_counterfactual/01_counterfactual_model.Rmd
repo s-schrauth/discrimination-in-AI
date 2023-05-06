@@ -30,7 +30,10 @@ pacman::p_load(tidyverse,
                rstan,
                wesanderson,
                ggdist,
-               ggformula)
+               ggformula,
+               knitr,
+               kableExtra,
+               magick)
 
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
@@ -902,5 +905,66 @@ theta_race = theta_calc(theta_lower = 0,
                         priv = "Race_Caucasian")
 
 theta_race
+```
+
+### Plots for Deltas
+Sex
+```{r}
+plot_theta_sex = data.frame(x = c("Original", paste0("Post-processed (\u03B8 = ", theta_sex$theta, ")")),
+                            y = c(delta_sex, theta_sex$delta)) %>% 
+  ggplot(aes(x = x, y = y, fill = x)) +
+  geom_col(width = 0.6) +
+  geom_text(aes(label = round(y, 4)), 
+              vjust = -0.35) +
+  labs(title = "Vergleich der (\u03B5-\u03B4)-approximativen kontrafaktischen Fairness für Geschlecht",
+       subtitle = "für Original- & Post-processed-Modell (mit fixem \u03B5=0.1)",
+       x = "Modell",
+       y = "\u03B4 (Delta)") +
+  scale_fill_manual(values = wes_palette("Darjeeling1")[c(5,3)]) +
+  lims(y = c(0,0.5)) +
+  guides(fill = "none")
+
+plot_theta_sex
+```
+
+Race
+```{r}
+plot_theta_race = data.frame(x = c("Original", paste0("Post-processed (\u03B8 = ", theta_race$theta, ")")),
+                             y = c(delta_race, theta_race$delta)) %>% 
+  ggplot(aes(x = x, y = y, fill = x)) +
+  geom_col(width = 0.6) +
+  geom_text(aes(label = round(y, 4)), 
+              vjust = -0.35) +
+  labs(title = "Vergleich der (\u03B5-\u03B4)-approximativen kontrafaktischen Fairness für Race",
+       subtitle = "für Original- & Post-processed-Modell (mit fixem \u03B5=0.1)",
+       x = "Modell",
+       y = "\u03B4 (Delta)") +
+  scale_fill_manual(values = wes_palette("Darjeeling1")[c(5,3)]) +
+  lims(y = c(0,0.5)) +
+  guides(fill = "none")
+
+plot_theta_race
+```
+
+```{r}
+ggsave("10_plot_theta_sex.png",
+       plot = plot_theta_sex,
+       device = "png",
+       path = here("03_outputs", "04_counterfactual"),
+       dpi = 300,
+       width = 20,
+       height = 12,
+       units = c("cm")
+       )
+
+ggsave("11_plot_theta_race.png",
+       plot = plot_theta_race,
+       device = "png",
+       path = here("03_outputs", "04_counterfactual"),
+       dpi = 300,
+       width = 20,
+       height = 12,
+       units = c("cm")
+       )
 ```
 
