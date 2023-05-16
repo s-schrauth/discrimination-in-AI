@@ -89,7 +89,7 @@ plot_base_sex = plot(base_fairobj_sex, fairness_metrics = c("STP", "TPR", "PPV")
   facet_wrap(~ factor(metric, levels = c("Statistical parity ratio   (TP + FP)/(TP + FP + TN + FN)",
                                          "Equal opportunity ratio     TP/(TP + FN)",
                                          "Predictive parity ratio     TP/(TP + FP)"),
-                      labels = c("Statistical Parity \n(Equal Accuracy)",
+                      labels = c("Statistical Parity \n(Equal Positive Rate)",
                                  "Equal Opportunity \n(Equal TPR)",
                                  "Predictive Parity \n(Equal Precision)")
                       ), ncol = 1) +
@@ -129,7 +129,7 @@ plot_base_race = plot(base_fairobj_race, fairness_metrics = c("STP", "TPR", "PPV
   facet_wrap(~ factor(metric, levels = c("Statistical parity ratio   (TP + FP)/(TP + FP + TN + FN)",
                                          "Equal opportunity ratio     TP/(TP + FN)",
                                          "Predictive parity ratio     TP/(TP + FP)"),
-                      labels = c("Statistical Parity \n(Equal Accuracy)",
+                      labels = c("Statistical Parity \n(Equal Positive Rate)",
                                  "Equal Opportunity \n(Equal TPR)",
                                  "Predictive Parity \n(Equal Precision)")
                       ), ncol = 1) +
@@ -242,7 +242,7 @@ plot_rew_sex = plot(rew_fairobj_sex, fairness_metrics = c("STP", "TPR", "PPV")) 
   facet_wrap(~ factor(metric, levels = c("Statistical parity ratio   (TP + FP)/(TP + FP + TN + FN)",
                                          "Equal opportunity ratio     TP/(TP + FN)",
                                          "Predictive parity ratio     TP/(TP + FP)"),
-                      labels = c("Statistical Parity \n(Equal Accuracy)",
+                      labels = c("Statistical Parity \n(Equal Positive Rate)",
                                  "Equal Opportunity \n(Equal TPR)",
                                  "Predictive Parity \n(Equal Precision)")
                       ), ncol = 1) +
@@ -361,7 +361,7 @@ plot_rew_race = plot(rew_fairobj_race, fairness_metrics = c("STP", "TPR", "PPV")
   facet_wrap(~ factor(metric, levels = c("Statistical parity ratio   (TP + FP)/(TP + FP + TN + FN)",
                                          "Equal opportunity ratio     TP/(TP + FN)",
                                          "Predictive parity ratio     TP/(TP + FP)"),
-                      labels = c("Statistical Parity \n(Equal Accuracy)",
+                      labels = c("Statistical Parity \n(Equal Positive Rate)",
                                  "Equal Opportunity \n(Equal TPR)",
                                  "Predictive Parity \n(Equal Precision)")
                       ), ncol = 1) +
