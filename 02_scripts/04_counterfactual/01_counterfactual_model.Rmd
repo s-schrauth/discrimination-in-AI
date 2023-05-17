@@ -78,36 +78,36 @@ colors_discrete = rep(wes_palette("Darjeeling1"), 3)
 
 ```{r}
 dag = dagitty('dag {
-  Age [exposure,pos="0,-2"]
-  Sex [pos="0,-1"]
+  Alter [exposure,pos="0,-2"]
+  Geschlecht [pos="0,-1"]
   Race [pos="0,0"]
-  Priors [pos="0.5, -1.75"]
-  Crime [pos="1, -1.75"]
+  Straftaten [pos="0.5, -1.75"]
+  Schwere [pos="1, -1.75"]
   U_D [latent,pos="2, -1.5"]
-  JuvMisd [pos="0.5, -0.25"]
-  JuvFel [pos="1,-0.25"]
+  JugOrdw [pos="0.5, -0.25"]
+  JugStrft [pos="1,-0.25"]
   U_J [latent,pos="2, -0.5"]
   COMPAS [outcome,pos="1.5,-1"]
   
-  Race -> Priors
-  Race -> Crime
-  Race -> JuvMisd
-  Race -> JuvFel
+  Race -> Straftaten
+  Race -> Schwere
+  Race -> JugOrdw
+  Race -> JugStrft
   Race -> COMPAS
-  Sex -> Priors
-  Sex -> Crime
-  Sex -> JuvMisd
-  Sex -> JuvFel
-  Sex -> COMPAS
-  Age -> Priors
-  Age -> Crime
-  Age -> JuvMisd
-  Age -> JuvFel
-  Age -> COMPAS
-  U_D -> Priors
-  U_D -> Crime
-  U_J -> JuvMisd
-  U_J -> JuvFel
+  Geschlecht -> Straftaten
+  Geschlecht -> Schwere
+  Geschlecht -> JugOrdw
+  Geschlecht -> JugStrft
+  Geschlecht -> COMPAS
+  Alter -> Straftaten
+  Alter -> Schwere
+  Alter -> JugOrdw
+  Alter -> JugStrft
+  Alter -> COMPAS
+  U_D -> Straftaten
+  U_D -> Schwere
+  U_J -> JugOrdw
+  U_J -> JugStrft
   U_D -> COMPAS
   }')
 
@@ -126,25 +126,145 @@ dag_plot = tidy_dagitty(dag) %>%
                           curvature = 1) +
   geom_dag_node(data = function(x) subset(x, name %in% c("U[J]", "U[D]")),
                  color = colors[2]) +
-  geom_dag_node(data = function(x) subset(x, name %in% c("Race", "Sex", "Age")),
+  geom_dag_node(data = function(x) subset(x, name %in% c("Race", "Geschlecht", "Alter")),
                  color = colors[5]) +
   geom_dag_node(data = function(x) subset(x, name=="COMPAS"),
                  color = colors[3]) +
-  geom_dag_node(data = function(x) subset(x, name %in% c("Priors", 
-                                                         "Crime",
-                                                         "JuvMisd",
-                                                         "JuvFel")),
+  geom_dag_node(data = function(x) subset(x, name %in% c("Straftaten", 
+                                                         "Schwere",
+                                                         "JugOrdw",
+                                                         "JugStrft")),
                 color = colors[4]) +
-  geom_dag_text(size = 2.2, parse = TRUE) +
+  geom_dag_text(size = 1.9, parse = TRUE) +
   theme_dag()
 
 dag_plot
+```
+
+```{r}
+dag_counter = dagitty('dag {
+  Alter [exposure,pos="0,-2"]
+  Geschlecht [pos="0,-1"]
+  Race [pos="0,0"]
+  Straftaten [pos="0.5, -1.75"]
+  Schwere [pos="1, -1.75"]
+  U_D [latent,pos="2, -1.5"]
+  JugOrdw [pos="0.5, -0.25"]
+  JugStrft [pos="1,-0.25"]
+  U_J [latent,pos="2, -0.5"]
+  COMPAS [outcome,pos="1.5,-1"]
+  
+  Alter_k [exposure,pos="4,-2"]
+  Geschlecht_k [pos="4,-1"]
+  Race_k [pos="4,0"]
+  Straftaten_k [pos="3.5, -1.75"]
+  Schwere_k [pos="3, -1.75"]
+  JugOrdw_k [pos="3.5, -0.25"]
+  JugStrft_k [pos="3,-0.25"]
+  COMPAS_k [outcome,pos="2.5,-1"]
+  
+  Race -> Straftaten
+  Race -> Schwere
+  Race -> JugOrdw
+  Race -> JugStrft
+  Race -> COMPAS
+  Geschlecht -> Straftaten
+  Geschlecht -> Schwere
+  Geschlecht -> JugOrdw
+  Geschlecht -> JugStrft
+  Geschlecht -> COMPAS
+  Alter -> Straftaten
+  Alter -> Schwere
+  Alter -> JugOrdw
+  Alter -> JugStrft
+  Alter -> COMPAS
+  U_D -> Straftaten
+  U_D -> Schwere
+  U_J -> JugOrdw
+  U_J -> JugStrft
+  U_D -> COMPAS
+  
+  Race_k -> Straftaten_k
+  Race_k -> Schwere_k
+  Race_k -> JugOrdw_k
+  Race_k -> JugStrft_k
+  Race_k -> COMPAS_k
+  Geschlecht_k -> Straftaten_k
+  Geschlecht_k -> Schwere_k
+  Geschlecht_k -> JugOrdw_k
+  Geschlecht_k -> JugStrft_k
+  Geschlecht_k -> COMPAS_k
+  Alter_k -> Straftaten_k
+  Alter_k -> Schwere_k
+  Alter_k -> JugOrdw_k
+  Alter_k -> JugStrft_k
+  Alter_k -> COMPAS_k
+  U_D -> Straftaten_k
+  U_D -> Schwere_k
+  U_J -> JugOrdw_k
+  U_J -> JugStrft_k
+  U_D -> COMPAS_k
+  }')
+
+dag_counter_plot = tidy_dagitty(dag_counter) %>% 
+  mutate(across(.cols = c(name, to),
+                .fns = ~ str_replace(., "Geschlecht_k", "bold(!Geschlecht)")
+                )
+         ) %>% 
+  mutate(across(.cols = c(name, to),
+                .fns = ~ str_replace(., "_(\\w)", "[\\1]")
+                )
+         ) %>% 
+  ggplot(aes(x = x, y = y, xend = xend, yend = yend)) +
+  geom_dag_edges(data_directed = function(x) subset(x, name != "U[J]" & name != "U[D]")) +
+  geom_dag_edges(data_directed = function(x) subset(x, to == c("COMPAS", "COMPAS[k]")),
+                 edge_color = colors[3]) +
+  geom_dag_edges_arc(data = function(x) subset(x, name == "U[J]" & to %in% c("JugOrdw", "JugStrft")),
+                          curvature = -1) +
+  geom_dag_edges_arc(data = function(x) subset(x, name == "U[D]" & to %in% c("Straftaten", "Schwere")),
+                          curvature = 1) +
+  geom_dag_edges_arc(data = function(x) subset(x, name == "U[J]" & to %in% c("JugOrdw[k]", "JugStrft[k]")),
+                          curvature = 1) +
+  geom_dag_edges_arc(data = function(x) subset(x, name == "U[D]" & to %in% c("Straftaten[k]", "Schwere[k]")),
+                          curvature = -1) +
+  geom_dag_node(data = function(x) subset(x, name %in% c("U[J]", "U[D]")),
+                 color = colors[2]) +
+  geom_dag_node(data = function(x) subset(x, name %in% c("Race", "Geschlecht", "Alter",
+                                                         "Race[k]", "Alter[k]")),
+                 color = colors[5]) +
+  geom_dag_node(data = function(x) subset(x, name == "bold(!Geschlecht)"),
+                 color = colors[1]) +
+  geom_dag_node(data = function(x) subset(x, name==c("COMPAS", "COMPAS[k]")),
+                 color = colors[3]) +
+  geom_dag_node(data = function(x) subset(x, name %in% c("Straftaten", 
+                                                         "Schwere",
+                                                         "JugOrdw",
+                                                         "JugStrft",
+                                                         "Straftaten[k]", 
+                                                         "Schwere[k]",
+                                                         "JugOrdw[k]",
+                                                         "JugStrft[k]")),
+                color = colors[4]) +
+  geom_dag_text(size = 1.9, parse = TRUE) +
+  theme_dag()
+
+dag_counter_plot
 
 ```
 
 ```{r}
 ggsave("01_dag.png",
        plot = dag_plot,
+       device = "png",
+       path = here("03_outputs", "04_counterfactual"),
+       dpi = 300,
+       width = 25,
+       height = 15,
+       units = c("cm")
+       )
+
+ggsave("01_dag_counter.png",
+       plot = dag_counter_plot,
        device = "png",
        path = here("03_outputs", "04_counterfactual"),
        dpi = 300,
