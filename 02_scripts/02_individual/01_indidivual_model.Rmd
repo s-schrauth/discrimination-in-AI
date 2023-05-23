@@ -103,7 +103,7 @@ kable(model_base_summary_nice, booktabs = TRUE,
       align = "c", 
       digits = c(3, 1, 3, 2, 4)) %>% 
   row_spec(seq(1, nrow(model_base_summary_nice), 2), background = "#f8f8f8") %>% 
-  kable_styling() %>% 
+  kable_styling(html_font = "serif") %>% 
   save_kable(file = here("03_outputs", "02_individual", "08_table_base.png"),
              density = 500)
 ```
@@ -124,14 +124,15 @@ plot_base_rel = data.frame(x = c("Fair", "Unfair"),
                            y = c(1-dist_base$n_unfair_rel, dist_base$n_unfair_rel)) %>% 
   ggplot(aes(x = x, y = y, fill = factor(1))) +
     geom_col() +
-    geom_text(aes(label = percent(y, accuracy = 0.1)), vjust = -0.35) +
+    geom_text(aes(label = percent(y, accuracy = 0.1)), vjust = -0.35, family = "serif") +
     labs(title = "Anteil an fairen Paar-Vergleichen",
-         subtitle = "mit (individueller) Fairness als D(Mx, My) \u2264 d(x,y)",
+         subtitle = expression("mit individueller Fairness als D("*plain("M"[x])*","*plain("M"[y])*") \u2264 d(x,y)"),
          x = "",
          y = "Anteil an allen Paar-Vergleichen") +
     scale_fill_manual(values = wes_palette("Darjeeling1")[5]) +
     scale_y_continuous(labels = percent) +
-    guides(fill = "none")
+    guides(fill = "none") +
+    theme(text = element_text(family = "serif"))
 ```
 
 ### Save output
@@ -179,7 +180,8 @@ plot_base_matrix = dist_base$diff_dist %>%
   theme(axis.text.x = element_blank(),
         axis.ticks.x = element_blank(),
         axis.text.y = element_blank(),
-        axis.ticks.y = element_blank())
+        axis.ticks.y = element_blank(),
+        text = element_text(family = "serif"))
 ```
 
 ```{r}
@@ -205,9 +207,10 @@ plot_base_dens = diff_dist_ordered %>%
                  linewidth = 1,
                  color = wes_palette("Darjeeling1")[5]) +
     labs(title = "Differenz der Input- und Output-Unterschiede aller Daten-Paare",
-         subtitle = "Histogramm und Dichte für D(Mx,My)-d(x,y)",
-         x = "Differenz von D(Mx,My) und d(x,y)",
-         y = "Dichte") 
+         subtitle = expression("Histogramm und Dichte für D("*plain("M"[x])*","*plain("M"[y])*")-d(x,y)"),
+         x = expression("Differenz von D("*plain("M"[x])*","*plain("M"[y])*") und d(x,y)"),
+         y = "Dichte") +
+    theme(text = element_text(family = "serif"))
 ```
 
 
@@ -216,7 +219,7 @@ ggsave("01_plot_base_rel.png",
        plot = plot_base_rel,
        device = "png",
        path = here("03_outputs", "02_individual"),
-       dpi = 300,
+       dpi = 500,
        width = 20,
        height = 12,
        units = c("cm")
@@ -226,7 +229,7 @@ ggsave("02_plot_base_matrix.png",
        plot = plot_base_matrix,
        device = "png",
        path = here("03_outputs", "02_individual"),
-       dpi = 300,
+       dpi = 500,
        width = 30,
        height = 30,
        units = c("cm")
@@ -236,7 +239,7 @@ ggsave("03_plot_base_dens.png",
        plot = plot_base_dens,
        device = "png",
        path = here("03_outputs", "02_individual"),
-       dpi = 300,
+       dpi = 500,
        width = 20,
        height = 12,
        units = c("cm")
@@ -287,6 +290,8 @@ hyperparam_results = data.frame(Lambda = lambdas,
                                 Log_Loss = results_acc) %>% 
   mutate(Kosten_Funktion = Log_Loss + Lambda * Fairness_Metrik)
 
+lambdas = seq(-120, 0, 20)
+
 plot_hyperparam_results = hyperparam_results %>% 
   pivot_longer(cols = !Lambda) %>% 
   mutate(name = str_replace(name, "_", "-")) %>% 
@@ -303,9 +308,10 @@ plot_hyperparam_results = hyperparam_results %>%
     scale_color_manual(values = wes_palette("Darjeeling1")[c(2,1,5)]) +
     scale_x_continuous(breaks = lambdas) +
     labs(title = "Hyperparameter-Tuning für \u03bb",
-         subtitle = "Log-loss, Fairness-Metrik & Kosten-Funktion (Log-loss + \u03bb * Fairness-Metrik) \nbei unterschiedlichen \u03bb-Werten",
+         subtitle = "Log-loss, Fairness-Metrik & Kosten-Funktion (Log-loss + \u03bb \u00d7 Fairness-Metrik) \nbei unterschiedlichen \u03bb-Werten",
          y = "") +
-    guides(color = "none")
+    guides(color = "none") +
+    theme(text = element_text(family = "serif"))
 ```
 
 
@@ -326,7 +332,7 @@ ggsave("04_plot_hyperparam_results.png",
        plot = plot_hyperparam_results,
        device = "png",
        path = here("03_outputs", "02_individual"),
-       dpi = 300,
+       dpi = 500,
        width = 20,
        height = 12,
        units = c("cm")
@@ -389,7 +395,7 @@ kable(model_fair_summary_nice, booktabs = TRUE,
       align = "c", 
       digits = c(3, 1, 3, 2, 4)) %>% 
   row_spec(seq(1, nrow(model_fair_summary_nice), 2), background = "#f8f8f8") %>% 
-  kable_styling() %>% 
+  kable_styling(html_font = "serif") %>% 
   save_kable(file = here("03_outputs", "02_individual", "09_table_fair.png"),
              density = 500)
 ```
@@ -411,18 +417,22 @@ data_plot_fair_rel = data.frame(x = c("Fair", "Unfair"),
 plot_fair_rel = plot_base_rel$data %>% 
   mutate(data = "Original-Modell") %>% 
   rbind(data_plot_fair_rel) %>% 
+  mutate(data = factor(data, levels = c("Original-Modell", "In-processed Modell"))) %>% 
   ggplot(aes(x = x, y = y, fill = data)) +
     geom_col(position = position_dodge(0.82), width = 0.8) +
     geom_text(aes(label = percent(y, accuracy = 0.1)), 
               position = position_dodge(0.82), 
-              vjust = -0.35) +
+              vjust = -0.35,
+              family = "serif") +
     labs(title = "Anteil an fairen Paar-Vergleichen",
-         subtitle = "mit (individueller) Fairness als D(Mx, My) \u2264 d(x,y)",
+         subtitle = expression("mit individueller Fairness als D("*plain("M"[x])*","*plain("M"[y])*") \u2264 d(x,y)"),
          x = "",
          y = "Anteil an allen Paar-Vergleichen",
-         fill = "Modell") +
-    scale_fill_manual(values = wes_palette("Darjeeling1")[c(3, 5)]) +
-    scale_y_continuous(labels = percent)
+         fill = "") +
+    scale_fill_manual(values = wes_palette("Darjeeling1")[c(5,3)]) +
+    scale_y_continuous(labels = percent) +
+    theme(text = element_text(family = "serif"),
+          legend.position = "top")
 ```
 
 
@@ -452,7 +462,8 @@ plot_fair_matrix = dist_fair$diff_dist %>%
   theme(axis.text.x = element_blank(),
         axis.ticks.x = element_blank(),
         axis.text.y = element_blank(),
-        axis.ticks.y = element_blank())
+        axis.ticks.y = element_blank(),
+        text = element_text(family = "serif"))
 ```
 
 ```{r}
@@ -478,11 +489,18 @@ plot_fair_dens = plot_base_dens +
                  linewidth = 1,
                  color = wes_palette("Darjeeling1")[3]) +
     labs(title = "Differenz der Input- und Output-Unterschiede aller Daten-Paare",
-         subtitle = "Histogramm und Dichte für D(Mx,My)-d(x,y)",
-         x = "Differenz von D(Mx,My) und d(x,y)",
+         subtitle = expression("Histogramm und Dichte für D("*plain("M"[x])*","*plain("M"[y])*")-d(x,y)"),
+         x = expression("Differenz von D("*plain("M"[x])*","*plain("M"[y])*") und d(x,y)"),
          y = "Dichte") +
-    geom_label(x = -820, y = 0.0035, label = "In-processed", color = wes_palette("Darjeeling1")[3]) +
-    geom_label(x = -50, y = 0.002, label = "Original", color = wes_palette("Darjeeling1")[5]) 
+    theme(text = element_text(family = "serif")) +
+    geom_label(x = -820, y = 0.0035, 
+               label = "In-processed", 
+               color = wes_palette("Darjeeling1")[3],
+               family = "serif") +
+    geom_label(x = -50, y = 0.002, 
+               label = "Original", 
+               color = wes_palette("Darjeeling1")[5],
+               family = "serif") 
 ```
 
 
@@ -510,7 +528,7 @@ ggsave("05_plot_fair_rel.png",
        plot = plot_fair_rel,
        device = "png",
        path = here("03_outputs", "02_individual"),
-       dpi = 300,
+       dpi = 500,
        width = 20,
        height = 12,
        units = c("cm")
@@ -520,7 +538,7 @@ ggsave("06_plot_fair_matrix.png",
        plot = plot_fair_matrix,
        device = "png",
        path = here("03_outputs", "02_individual"),
-       dpi = 300,
+       dpi = 500,
        width = 30,
        height = 30,
        units = c("cm")
@@ -530,7 +548,7 @@ ggsave("07_plot_fair_dens.png",
        plot = plot_fair_dens,
        device = "png",
        path = here("03_outputs", "02_individual"),
-       dpi = 300,
+       dpi = 500,
        width = 20,
        height = 12,
        units = c("cm")
