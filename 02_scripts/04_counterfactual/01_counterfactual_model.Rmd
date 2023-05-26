@@ -35,6 +35,8 @@ pacman::p_load(tidyverse,
                kableExtra,
                magick)
 
+pacman::p_load_gh("hrbrmstr/ggchicklet")
+
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 ```
@@ -75,7 +77,7 @@ colors_discrete = rep(wes_palette("Darjeeling1"), 3)
 ```
 
 ## Build DAG (directed acyclic graph)
-
+## with code from https://stackoverflow.com/questions/65420136/how-do-you-adjust-the-arrows-in-a-ggplot-of-a-ggdag
 ```{r}
 dag = dagitty('dag {
   Alter [exposure,pos="0,-2"]
@@ -113,30 +115,41 @@ dag = dagitty('dag {
 
 #tidy_dagitty(dag)
 
+shorten_distance = 0.04
+
 dag_plot = tidy_dagitty(dag) %>% 
   mutate(name = str_replace(name, "U_J", "U[J]")) %>% 
   mutate(name = str_replace(name, "U_D", "U[D]")) %>% 
+  mutate(slope = (yend - y) / (xend - x), 
+         distance = sqrt((xend-x)^2 + (yend - y)^2),
+         proportion = shorten_distance/distance,
+         xend = (1-proportion)*xend + (proportion*x), 
+         yend = (1-proportion)*yend + (proportion*y)) %>% 
   ggplot(aes(x = x, y = y, xend = xend, yend = yend)) +
   geom_dag_edges(data_directed = function(x) subset(x, name != "U[J]" & name != "U[D]")) +
   geom_dag_edges(data_directed = function(x) subset(x, to == "COMPAS"),
                  edge_color = colors[3]) +
   geom_dag_edges_arc(data = function(x) subset(x, name == "U[J]"),
-                          curvature = -1) +
+                     curvature = -1) +
   geom_dag_edges_arc(data = function(x) subset(x, name == "U[D]" & to != "COMPAS"),
-                          curvature = 1) +
+                     curvature = 1) +
   geom_dag_node(data = function(x) subset(x, name %in% c("U[J]", "U[D]")),
-                 color = colors[2]) +
+                color = colors[2],
+                size = 25) +
   geom_dag_node(data = function(x) subset(x, name %in% c("Race", "Geschlecht", "Alter")),
-                 color = colors[5]) +
+                color = colors[5],
+                size = 25) +
   geom_dag_node(data = function(x) subset(x, name=="COMPAS"),
-                 color = colors[3]) +
+                color = colors[3],
+                size = 25) +
   geom_dag_node(data = function(x) subset(x, name %in% c("Straftaten", 
                                                          "Schwere",
                                                          "JugOrdw",
                                                          "JugStrft")),
-                color = colors[4]) +
-  geom_dag_text(size = 1.9, parse = TRUE) +
-  theme_dag()
+                color = colors[4],
+                size = 25) +
+  geom_dag_text(size = 3, family = "serif", parse = TRUE) +
+  theme_dag(base_family = "serif") 
 
 dag_plot
 ```
@@ -216,6 +229,11 @@ dag_counter_plot = tidy_dagitty(dag_counter) %>%
                 )
          ) %>% 
   ggplot(aes(x = x, y = y, xend = xend, yend = yend)) +
+    geom_rrect(aes(xmin = 2.25, xmax = 4.25, ymin = -2.25, ymax = 0.25,
+                 fill = colors[1],
+                 color = colors[1]),
+             alpha = 0.01,
+             r = unit(0.8, "cm")) +
   geom_dag_edges(data_directed = function(x) subset(x, name != "U[J]" & name != "U[D]")) +
   geom_dag_edges(data_directed = function(x) subset(x, to == c("COMPAS", "COMPAS[k]")),
                  edge_color = colors[3]) +
@@ -228,14 +246,18 @@ dag_counter_plot = tidy_dagitty(dag_counter) %>%
   geom_dag_edges_arc(data = function(x) subset(x, name == "U[D]" & to %in% c("Straftaten[k]", "Schwere[k]")),
                           curvature = -1) +
   geom_dag_node(data = function(x) subset(x, name %in% c("U[J]", "U[D]")),
-                 color = colors[2]) +
+                color = colors[2],
+                size = 18) +
   geom_dag_node(data = function(x) subset(x, name %in% c("Race", "Geschlecht", "Alter",
                                                          "Race[k]", "Alter[k]")),
-                 color = colors[5]) +
+                color = colors[5],
+                size = 18) +
   geom_dag_node(data = function(x) subset(x, name == "bold(!Geschlecht)"),
-                 color = colors[1]) +
+                color = colors[1],
+                size = 18) +
   geom_dag_node(data = function(x) subset(x, name==c("COMPAS", "COMPAS[k]")),
-                 color = colors[3]) +
+                color = colors[3],
+                size = 18) +
   geom_dag_node(data = function(x) subset(x, name %in% c("Straftaten", 
                                                          "Schwere",
                                                          "JugOrdw",
@@ -244,12 +266,14 @@ dag_counter_plot = tidy_dagitty(dag_counter) %>%
                                                          "Schwere[k]",
                                                          "JugOrdw[k]",
                                                          "JugStrft[k]")),
-                color = colors[4]) +
-  geom_dag_text(size = 1.9, parse = TRUE) +
-  theme_dag()
+                color = colors[4],
+                size = 18) +
+  geom_dag_text(size = 2.2, family = "serif", parse = TRUE) +
+  theme_dag(base_family = "serif") +
+  guides(fill = "none",
+         color = "none")
 
 dag_counter_plot
-
 ```
 
 ```{r}
@@ -257,7 +281,7 @@ ggsave("01_dag.png",
        plot = dag_plot,
        device = "png",
        path = here("03_outputs", "04_counterfactual"),
-       dpi = 300,
+       dpi = 1000,
        width = 25,
        height = 15,
        units = c("cm")
@@ -267,7 +291,7 @@ ggsave("01_dag_counter.png",
        plot = dag_counter_plot,
        device = "png",
        path = here("03_outputs", "04_counterfactual"),
-       dpi = 300,
+       dpi = 1000,
        width = 25,
        height = 15,
        units = c("cm")
@@ -702,21 +726,25 @@ bin_colors_race_wo = unique(ggplot_build(pred_race_wo$plot_comp_bin)$data[[1]]["
 
 # Sex
 plot_sex_logit = pred_sex$plot_comp_logit +
-   geom_label(x = 0.55, y = 1.25, label = "Original", color = bin_colors_sex[1,1]) +
-   geom_label(x = 0.2, y = 1.2, label = "Kontrafaktisch", color = bin_colors_sex[2,1]) 
+   geom_label(x = 0.55, y = 1.25, label = "Original", color = bin_colors_sex[1,1], family = "serif") +
+   geom_label(x = 0.2, y = 1.2, label = "Kontrafaktisch", color = bin_colors_sex[2,1], family = "serif") +
+   theme(text = element_text(family = "serif"))
 
 # Race
 plot_race_wb_logit = pred_race_wb$plot_comp_logit +
-   geom_label(x = 0.55, y = 1.25, label = "Original", color = bin_colors_race_wb[1,1]) +
-   geom_label(x = 0.2, y = 1.15, label = "Kontrafaktisch", color = bin_colors_race_wb[2,1]) 
+   geom_label(x = 0.55, y = 1.25, label = "Original", color = bin_colors_race_wb[1,1], family = "serif") +
+   geom_label(x = 0.2, y = 1.15, label = "Kontrafaktisch", color = bin_colors_race_wb[2,1], family = "serif") +
+   theme(text = element_text(family = "serif"))
 
 plot_race_wh_logit = pred_race_wh$plot_comp_logit +
-   geom_label(x = 0.55, y = 1.3, label = "Original", color = bin_colors_race_wh[1,1]) +
-   geom_label(x = 0.1, y = 1.1, label = "Kontrafaktisch", color = bin_colors_race_wh[2,1]) 
+   geom_label(x = 0.55, y = 1.3, label = "Original", color = bin_colors_race_wh[1,1], family = "serif") +
+   geom_label(x = 0.1, y = 1.1, label = "Kontrafaktisch", color = bin_colors_race_wh[2,1], family = "serif") +
+   theme(text = element_text(family = "serif")) 
 
 plot_race_wo_logit = pred_race_wo$plot_comp_logit +
-   geom_label(x = 0.55, y = 1.23, label = "Original", color = bin_colors_race_wo[1,1]) +
-   geom_label(x = 0.15, y = 1.1, label = "Kontrafaktisch", color = bin_colors_race_wo[2,1]) 
+   geom_label(x = 0.55, y = 1.23, label = "Original", color = bin_colors_race_wo[1,1], family = "serif") +
+   geom_label(x = 0.15, y = 1.1, label = "Kontrafaktisch", color = bin_colors_race_wo[2,1], family = "serif") +
+   theme(text = element_text(family = "serif")) 
 ```
 
 
@@ -727,8 +755,10 @@ plot_sex_bin = pred_sex$plot_comp_bin +
              subtitle = "Häufigkeit der geschätzten Score-Werte für originale & kontrafaktische Daten (Geschlecht)",
              x = "COMPAS-Score",
              y = "Geschätzte Häufigkeit",
-             fill = "Daten") +
-          scale_fill_manual(values = as.vector(bin_colors_sex[,1]))
+             fill = "") +
+          scale_fill_manual(values = as.vector(bin_colors_sex[,1])) +
+          theme(text = element_text(family = "serif"),
+                legend.position = "top")
 
 pred_race_bin = pred_race_wb
 
@@ -755,7 +785,9 @@ plot_race_bin = pred_race_bin$plot_comp_bin +
              subtitle = "Häufigkeit der geschätzten Score-Werte für originale & kontrafaktische Daten (Race)",
              x = "COMPAS-Score",
              y = "Geschätzte Häufigkeit",
-             fill = "Daten")
+             fill = "") +
+        theme(text = element_text(family = "serif"),
+              legend.position = "top")
 ```
 
 
@@ -799,7 +831,8 @@ plot_weights_sex = rbind(weights_sex_base, weights_sex_counter) %>%
        y =  "Median \u00b1 MAD") +
   guides(color = "none") +
   scale_color_manual(values = colors_discrete[c(3,2)]) +
-  coord_flip()
+  coord_flip() +
+  theme(text = element_text(family = "serif"))
 
 # Race
 weights_race_base = pred_base$weight_table %>% 
@@ -873,7 +906,9 @@ plot_weights_race = rbind(weights_race_base,
        y =  "Median \u00b1 MAD") +
   guides(color = "none") +
   scale_color_manual(values = colors_discrete[c(5,4,1,2)]) +
-  coord_flip()
+  coord_flip() +
+  theme(text = element_text(family = "serif"))
+
 
 plot_weights_race
 ```
@@ -884,7 +919,7 @@ ggsave("02_plot_sex_logit.png",
        plot = plot_sex_logit,
        device = "png",
        path = here("03_outputs", "04_counterfactual"),
-       dpi = 300,
+       dpi = 500,
        width = 20,
        height = 12,
        units = c("cm")
@@ -894,7 +929,7 @@ ggsave("03_plot_race_wb_logit.png",
        plot = plot_race_wb_logit,
        device = "png",
        path = here("03_outputs", "04_counterfactual"),
-       dpi = 300,
+       dpi = 500,
        width = 20,
        height = 12,
        units = c("cm")
@@ -904,7 +939,7 @@ ggsave("04_plot_race_wh_logit.png",
        plot = plot_race_wh_logit,
        device = "png",
        path = here("03_outputs", "04_counterfactual"),
-       dpi = 300,
+       dpi = 500,
        width = 20,
        height = 12,
        units = c("cm")
@@ -914,7 +949,7 @@ ggsave("05_plot_race_wo_logit.png",
        plot = plot_race_wo_logit,
        device = "png",
        path = here("03_outputs", "04_counterfactual"),
-       dpi = 300,
+       dpi = 500,
        width = 20,
        height = 12,
        units = c("cm")
@@ -924,7 +959,7 @@ ggsave("06_plot_sex_bin.png",
        plot = plot_sex_bin,
        device = "png",
        path = here("03_outputs", "04_counterfactual"),
-       dpi = 300,
+       dpi = 500,
        width = 20,
        height = 12,
        units = c("cm")
@@ -934,7 +969,7 @@ ggsave("07_plot_race_bin.png",
        plot = plot_race_bin,
        device = "png",
        path = here("03_outputs", "04_counterfactual"),
-       dpi = 300,
+       dpi = 500,
        width = 20,
        height = 12,
        units = c("cm")
@@ -944,7 +979,7 @@ ggsave("08_plot_weights_sex.png",
        plot = plot_weights_sex,
        device = "png",
        path = here("03_outputs", "04_counterfactual"),
-       dpi = 300,
+       dpi = 500,
        width = 20,
        height = 12,
        units = c("cm")
@@ -954,7 +989,7 @@ ggsave("09_plot_weights_race.png",
        plot = plot_weights_race,
        device = "png",
        path = here("03_outputs", "04_counterfactual"),
-       dpi = 300,
+       dpi = 500,
        width = 20,
        height = 12,
        units = c("cm")
@@ -1035,15 +1070,18 @@ plot_theta_sex_base = data.frame(x = c("Original"),
   ggplot(aes(x = x, y = y, fill = x)) +
   geom_col() +
   geom_text(aes(label = round(y, 4)), 
-              vjust = -0.35) +
+            vjust = -0.75,
+            family = "serif") +
   labs(title = "Vergleich der (\u03B5-\u03B4)-approximativen kontrafaktischen Fairness für Geschlecht",
        subtitle = "für Original-Modell (mit fixem \u03B5=0.1)",
        x = "Modell",
-       y = "\u03B4 (Delta)") +
+       y = "\u03B4") +
   scale_fill_manual(values = wes_palette("Darjeeling1")[c(5,3)]) +
     scale_x_discrete(expand = c(0, 1.2)) +
   lims(y = c(0,0.5)) +
-  guides(fill = "none")
+  guides(fill = "none") +
+  theme(text = element_text(family = "serif"))
+
 
 plot_theta_sex_base
 ```
@@ -1054,15 +1092,18 @@ plot_theta_sex = data.frame(x = c("Original", paste0("Post-processed (\u03B8 = "
   ggplot(aes(x = x, y = y, fill = x)) +
   geom_col() +
   geom_text(aes(label = round(y, 4)), 
-              vjust = -0.35) +
+            vjust = -0.75,
+            family = "serif") +
   labs(title = "Vergleich der (\u03B5-\u03B4)-approximativen kontrafaktischen Fairness für Geschlecht",
        subtitle = "für Original- & Post-processed-Modell (mit fixem \u03B5=0.1)",
        x = "Modell",
-       y = "\u03B4 (Delta)") +
+       y = "\u03B4") +
   scale_fill_manual(values = wes_palette("Darjeeling1")[c(5,3)]) +
   scale_x_discrete(expand = c(0, 0.8)) +
   lims(y = c(0,0.5)) +
-  guides(fill = "none")
+  guides(fill = "none") +
+  theme(text = element_text(family = "serif"))
+
 
 plot_theta_sex
 ```
@@ -1075,15 +1116,18 @@ plot_theta_race_base = data.frame(x = c("Original"),
   ggplot(aes(x = x, y = y, fill = x)) +
   geom_col() +
   geom_text(aes(label = round(y, 4)), 
-              vjust = -0.35) +
+            vjust = -0.75,
+            family = "serif") +
   labs(title = "Vergleich der (\u03B5-\u03B4)-approximativen kontrafaktischen Fairness für Race",
        subtitle = "für Original-Modell (mit fixem \u03B5=0.1)",
        x = "Modell",
-       y = "\u03B4 (Delta)") +
+       y = "\u03B4") +
   scale_fill_manual(values = wes_palette("Darjeeling1")[c(5,3)]) +
   scale_x_discrete(expand = c(0, 1.2)) +
   lims(y = c(0,0.5)) +
-  guides(fill = "none")
+  guides(fill = "none") +
+  theme(text = element_text(family = "serif"))
+
 
 plot_theta_race_base
 ```
@@ -1094,15 +1138,18 @@ plot_theta_race = data.frame(x = c("Original", paste0("Post-processed (\u03B8 = 
   ggplot(aes(x = x, y = y, fill = x)) +
   geom_col() +
   geom_text(aes(label = round(y, 4)), 
-              vjust = -0.35) +
+            vjust = -0.75,
+            family = "serif") +
   labs(title = "Vergleich der (\u03B5-\u03B4)-approximativen kontrafaktischen Fairness für Race",
        subtitle = "für Original- & Post-processed-Modell (mit fixem \u03B5=0.1)",
        x = "Modell",
-       y = "\u03B4 (Delta)") +
+       y = "\u03B4") +
   scale_fill_manual(values = wes_palette("Darjeeling1")[c(5,3)]) +
   scale_x_discrete(expand = c(0, 0.8)) +
   lims(y = c(0,0.5)) +
-  guides(fill = "none")
+  guides(fill = "none") +
+  theme(text = element_text(family = "serif"))
+
 
 plot_theta_race
 ```
@@ -1112,7 +1159,7 @@ ggsave("10_plot_theta_sex_base.png",
        plot = plot_theta_sex_base,
        device = "png",
        path = here("03_outputs", "04_counterfactual"),
-       dpi = 300,
+       dpi = 500,
        width = 20,
        height = 12,
        units = c("cm")
@@ -1122,7 +1169,7 @@ ggsave("11_plot_theta_sex.png",
        plot = plot_theta_sex,
        device = "png",
        path = here("03_outputs", "04_counterfactual"),
-       dpi = 300,
+       dpi = 500,
        width = 20,
        height = 12,
        units = c("cm")
@@ -1132,7 +1179,7 @@ ggsave("12_plot_theta_race_base.png",
        plot = plot_theta_race_base,
        device = "png",
        path = here("03_outputs", "04_counterfactual"),
-       dpi = 300,
+       dpi = 500,
        width = 20,
        height = 12,
        units = c("cm")
@@ -1142,7 +1189,7 @@ ggsave("13_plot_theta_race.png",
        plot = plot_theta_race,
        device = "png",
        path = here("03_outputs", "04_counterfactual"),
-       dpi = 300,
+       dpi = 500,
        width = 20,
        height = 12,
        units = c("cm")
