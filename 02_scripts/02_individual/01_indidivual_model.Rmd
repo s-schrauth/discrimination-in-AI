@@ -8,7 +8,7 @@ output: html_document
 
 ## Goal
 
-After executing this script, the individual fairness/discrimination of the base model should be determined.
+After executing this script, the individual fairness of the base model should be determined.
 
 ## Preparation
 ### Install packages
@@ -16,7 +16,6 @@ After executing this script, the individual fairness/discrimination of the base 
 # when running the script the first time
 webshot::install_phantomjs()
 ```
-
 
 ```{r}
 pacman::p_load(tidyverse, 

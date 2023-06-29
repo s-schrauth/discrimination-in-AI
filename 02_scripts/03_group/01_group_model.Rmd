@@ -8,7 +8,7 @@ output: html_document
 
 ## Goal
 
-After executing this script, the group fairness/discrimination of the base model should be determined.
+After executing this script, the group fairness of the base model should be determined.
 
 ## Preparation
 ### Install packages

@@ -39,7 +39,6 @@ recipe = recipe(compas ~ .,
 ```
 
 ## Modelling (Logistic Regression)
-
 ```{r}
 model = logistic_reg() %>% 
   set_engine("glm") %>% 
@@ -93,7 +92,7 @@ kable(estimation_nice, booktabs = TRUE,
   row_spec(seq(1, nrow(estimation_nice), 2), background = "#f8f8f8") %>% 
   kable_styling() %>% 
   save_kable(file = here("03_outputs", "01_base_model", "09_table_estimates.png"),
-             density = 500)
+             density = 1000)
 ```
 
 

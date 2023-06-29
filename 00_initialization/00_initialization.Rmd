@@ -14,18 +14,13 @@ After executing this script, one has the technical set-up which allows the repro
 ## R & R-Packages
 
 only for Windows
-(installation of Rtools, a windows specific programm for package downloading, and the stringi package as it causes trouble downloaded otherwise)
+(installation of Rtools, a windows specific programm for package downloading)
 
 ```{r}
 if(!require(installr)) install.packages("installr")
 if(!require(remotes)) install.packages("remotes")
 
 installr::install.Rtools(check = TRUE, check_r_update = FALSE)
-
-# ifelse(!require(stringi),
-#        remotes::install_version("stringi", version = "1.7.8", upgrade="never"),
-#        if(packageVersion("stringi")!="1.7.8") remotes::install_version("stringi", version = "1.7.8", upgrade="never")
-#        )
 ```
 
 For the automated installation of R and the R-packages, the renv-package is used. After cloning the complete repo (including the renv folder and the renv.lock file) and executing the following command, every R-package used in this project should be installed (if not already installed on the local computer).

@@ -7,7 +7,7 @@ output: html_document
 
 ## Goal
 
-After executing this script, the compas dataset should be loaded.
+After executing this script, the compas dataset is loaded.
 
 ## Install packages
 

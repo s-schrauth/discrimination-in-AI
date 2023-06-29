@@ -9,7 +9,7 @@ output: html_document
 
 ## Goal
 
-After executing this script, the counterfactual fairness/discrimination of the base model should be determined.
+After executing this script, the counterfactual fairness of the base model should be determined.
 
 ## Preparation
 ### Install packages
@@ -1072,7 +1072,7 @@ plot_theta_sex_base = data.frame(x = c("Original"),
   geom_text(aes(label = round(y, 4)), 
             vjust = -0.75,
             family = "serif") +
-  labs(title = "Vergleich der (\u03B5-\u03B4)-approximativen kontrafaktischen Fairness für Geschlecht",
+  labs(title = "(\u03B5-\u03B4)-approximative kontrafaktische Fairness für Geschlecht",
        subtitle = "für Original-Modell (mit fixem \u03B5=0.1)",
        x = "Modell",
        y = "\u03B4") +
@@ -1118,7 +1118,7 @@ plot_theta_race_base = data.frame(x = c("Original"),
   geom_text(aes(label = round(y, 4)), 
             vjust = -0.75,
             family = "serif") +
-  labs(title = "Vergleich der (\u03B5-\u03B4)-approximativen kontrafaktischen Fairness für Race",
+  labs(title = "(\u03B5-\u03B4)-approximative kontrafaktische Fairness für Race",
        subtitle = "für Original-Modell (mit fixem \u03B5=0.1)",
        x = "Modell",
        y = "\u03B4") +

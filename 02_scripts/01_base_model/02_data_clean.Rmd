@@ -22,7 +22,7 @@ pacman::p_load(tidyverse,
                ggdist)
 ```
 
-## Load data
+## Load data (recidivism data set)
 
 ```{r}
 data_raw = readRDS(here("01_data", "02_data_processed", "01_base_model",
@@ -57,7 +57,11 @@ gg_miss_upset(data_raw)
 
 ## Cleaning
 
-INSERT TEXT HERE
+The data cleaning process consists of the following steps:
+1. Delete invalid cases (e.g. missing value in recidivism, ordinary traffic offenses) (line 81-84)
+2. Relabel the COMPAS variable (1 = low, 0 = high) (line 86)
+3. Calculate amount of days in jail (line 88-96)
+4. Factorize, reorder and relabel categorical variables (line 97-105)
 
 ```{r}
 data_clean = data_raw %>% 
@@ -332,7 +336,6 @@ ggsave("06_eda_race_sex.png",
 ```
 
 
-
 #### Protected variables: Race & Age
 ```{r}
 eda_race_age = data_clean %>% 
@@ -439,7 +442,6 @@ data = data_clean %>%
 
 
 ## Save data
-
 ```{r}
 saveRDS(data, 
         file = here("01_data", "02_data_processed", "01_base_model",
